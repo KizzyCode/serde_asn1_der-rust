@@ -1,0 +1,30 @@
+[package]
+name = "serde_asn1_der"
+version = "0.1.0"
+edition = "2018"
+authors = ["KizzyCode Software Labs./Keziah Biermann <development@kizzycode.de>"]
+keywords = ["serde", "asn1", "asn1-der", "serialize", "deserialize"]
+categories = ["encoding"]
+description = "An ASN.1-DER subset for serde"
+license = "BSD-2-Clause OR MIT"
+repository = "https://github.com/KizzyCode/serde_asn1_der"
+readme = "README.md"
+
+[badges]
+travis-ci = { repository = "KizzyCode/serde_asn1_der" }
+appveyor = { repository = "KizzyCode/serde_asn1_der" }
+
+
+[dependencies]
+serde = "1.0.89"
+
+[dev-dependencies]
+serde_derive = "1.0.89"
+serde_bytes = "0.10.5"
+
+
+[profile.release]
+overflow-checks = true
+
+[profile.bench]
+overflow-checks = true
