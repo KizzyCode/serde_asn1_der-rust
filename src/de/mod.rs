@@ -5,6 +5,8 @@ mod octet_string;
 mod sequence;
 mod utf8_string;
 
+#[cfg(feature = "complex_types")]
+use crate::asn1_wrapper::*;
 use crate::{
 	Result, SerdeAsn1DerError,
 	misc::{ ReadExt, PeekableReader, Length },
@@ -76,7 +78,9 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 			OctetString::TAG => self.deserialize_byte_buf(visitor),
 			Sequence::TAG => self.deserialize_seq(visitor),
 			Utf8String::TAG => self.deserialize_string(visitor),
-			_ => Err(SerdeAsn1DerError::InvalidData)?
+			#[cfg(feature = "complex_types")]
+			ObjectIdentifierAsn1::TAG => self.deserialize_seq(visitor),
+			_ => Err(SerdeAsn1DerError::InvalidData),
 		}
 	}
 	
@@ -148,8 +152,12 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	}
 	
 	fn deserialize_bytes<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-		if self.next_object()? != OctetString::TAG { Err(SerdeAsn1DerError::InvalidData)? }
-		visitor.visit_bytes(OctetString::deserialize(&self.buf)?)
+		match self.next_object()? {
+			OctetString::TAG => visitor.visit_bytes(OctetString::deserialize(&self.buf)?),
+			#[cfg(feature = "complex_types")]
+			ObjectIdentifierAsn1::TAG => visitor.visit_bytes(&self.buf),
+			_ => Err(SerdeAsn1DerError::InvalidData),
+		}
 	}
 	fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		if self.next_object()? != OctetString::TAG { Err(SerdeAsn1DerError::InvalidData)? }
@@ -179,15 +187,23 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	fn deserialize_newtype_struct<V: Visitor<'de>>(self, _name: &'static str, visitor: V)
 		-> Result<V::Value>
 	{
-		self.deserialize_any(visitor)
+		visitor.visit_newtype_struct(self)
 	}
 	
 	fn deserialize_seq<V: Visitor<'de>>(mut self, visitor: V) -> Result<V::Value> {
 		// Read tag and length
 		let (tag, len) = self.next_tag_len()?;
-		if tag != Sequence::TAG { Err(SerdeAsn1DerError::InvalidData)? }
-		
-		visitor.visit_seq(Sequence::deserialize_lazy(&mut self, len))
+		match tag {
+			Sequence::TAG => visitor.visit_seq(Sequence::deserialize_lazy(&mut self, len)),
+			#[cfg(feature = "complex_types")]
+			ObjectIdentifierAsn1::TAG => {
+				self.next_object()?;
+				visitor.visit_bytes(&self.buf)
+			},
+			_ => {
+				Err(SerdeAsn1DerError::InvalidData)
+			},
+		}
 	}
 	//noinspection RsUnresolvedReference
 	fn deserialize_tuple<V: Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value> {

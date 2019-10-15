@@ -16,12 +16,16 @@ appveyor = { repository = "KizzyCode/serde_asn1_der" }
 
 
 [dependencies]
-serde = "1.0.89"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+num-bigint-dig = { version = "0.5", default-features = false, optional = true }
+oid = { git = "https://github.com/bcortier-devolutions/oid", branch = "serde_support", default-features = false, features = ["serde_support"], optional = true }
 
 [dev-dependencies]
-serde_derive = "1.0.89"
-serde_bytes = "0.10.5"
+serde_bytes = "0.10"
+base64 = "0.10"
 
+[features]
+complex_types = ["oid", "num-bigint-dig"]
 
 [profile.release]
 overflow-checks = true

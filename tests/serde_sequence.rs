@@ -1,6 +1,5 @@
-#[macro_use] extern crate serde_derive;
 use serde_asn1_der::{ SerdeAsn1DerError, to_vec, from_bytes };
-
+use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 struct TestStruct {

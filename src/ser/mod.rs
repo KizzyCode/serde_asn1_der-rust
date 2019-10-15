@@ -1,19 +1,21 @@
 mod boolean;
 mod integer;
 mod null;
-mod octet_string;
 mod sequence;
 mod utf8_string;
 
+#[cfg(feature = "complex_types")]
+use crate::asn1_wrapper::*;
 use crate::{
 	Result, SerdeAsn1DerError,
 	ser::{
-		boolean::Boolean, integer::UnsignedInteger, null::Null, octet_string::OctetString,
+		boolean::Boolean, integer::UnsignedInteger, null::Null,
 		sequence::Sequence, utf8_string::Utf8String
 	}
 };
 use serde::Serialize;
 use std::io::{ Write, Cursor };
+use crate::misc::{Length, WriteExt};
 
 
 /// Serializes `value`
@@ -41,7 +43,8 @@ pub fn to_writer<T: ?Sized + Serialize>(value: &T, writer: impl Write) -> Result
 
 /// An ASN.1-DER serializer for `serde`
 pub struct Serializer<'se> {
-	writer: Box<dyn Write + 'se>
+	writer: Box<dyn Write + 'se>,
+	tag_for_next_bytes: u8,
 }
 impl<'se> Serializer<'se> {
 	/// Creates a new serializer that writes to `buf`
@@ -54,7 +57,21 @@ impl<'se> Serializer<'se> {
 	}
 	/// Creates a new serializer that writes to `writer`
 	pub fn new_to_writer(writer: impl Write + 'se) -> Self {
-		Self{ writer: Box::new(writer) }
+		Self{
+			writer: Box::new(writer),
+			tag_for_next_bytes: 0x04,
+		}
+	}
+
+	fn serialize_bytes_with_tag(&mut self, bytes: &[u8]) -> Result<usize> {
+		// Write tag, length and data
+		let mut written = self.writer.write_one(self.tag_for_next_bytes)?;
+		written += Length::serialize(bytes.len(), &mut self.writer)?;
+		written += self.writer.write_exact(bytes)?;
+
+		self.tag_for_next_bytes = 0x04; // reset to octet string
+
+		Ok(written)
 	}
 }
 //noinspection RsTraitImplementation
@@ -129,7 +146,7 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 	}
 	
 	fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok> {
-		OctetString::serialize(v, &mut self.writer)
+		self.serialize_bytes_with_tag(v)
 	}
 	
 	fn serialize_none(self) -> Result<Self::Ok> {
@@ -153,11 +170,25 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 	{
 		Err(SerdeAsn1DerError::UnsupportedType)
 	}
-	
+
+	#[cfg(not(feature = "complex_types"))]
 	fn serialize_newtype_struct<T: ?Sized + Serialize>(self, _name: &'static str, value: &T)
 		-> Result<Self::Ok>
 	{
 		value.serialize(self)
+	}
+
+	#[cfg(feature = "complex_types")]
+	fn serialize_newtype_struct<T: ?Sized + Serialize>(mut self, name: &'static str, value: &T)
+		-> Result<Self::Ok>
+	{
+		match name {
+			ObjectIdentifierAsn1::NAME => {
+				self.tag_for_next_bytes = ObjectIdentifierAsn1::TAG;
+				value.serialize(self)
+			}
+			_ => value.serialize(self),
+		}
 	}
 	
 	fn serialize_newtype_variant<T: ?Sized + Serialize>(self, _name: &'static str,

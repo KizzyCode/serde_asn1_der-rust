@@ -18,7 +18,7 @@
 //! With the `serde_derive`-crate you can derive `Serialize` and `Deserialize` for all non-primitive
 //! elements:
 //! ```rust
-//! use serde_derive::{ Serialize, Deserialize };
+//! use serde::{ Serialize, Deserialize };
 //!
 //! #[derive(Serialize, Deserialize)] // Now our struct supports all DER-conversion-traits
 //! struct Address {
@@ -41,7 +41,7 @@
 //! # Example
 //! ```rust
 //! use serde_asn1_der::{ to_vec, from_bytes };
-//! use serde_derive::{ Serialize, Deserialize };
+//! use serde::{ Serialize, Deserialize };
 //!
 //! #[derive(Serialize, Deserialize)]
 //! struct TestStruct {
@@ -57,6 +57,12 @@
 //! 	let deserialized: TestStruct = from_bytes(&serialized).unwrap();
 //! }
 //! ```
+
+#[cfg(feature = "complex_types")]
+extern crate num_bigint_dig as num_bigint;
+
+#[cfg(feature = "complex_types")]
+pub mod asn1_wrapper;
 
 mod misc;
 mod ser;
