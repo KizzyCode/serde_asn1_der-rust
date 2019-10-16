@@ -63,6 +63,8 @@ extern crate num_bigint_dig as num_bigint;
 
 #[cfg(feature = "complex_types")]
 pub mod asn1_wrapper;
+#[cfg(feature = "complex_types")]
+pub mod bit_string;
 
 mod misc;
 mod ser;
