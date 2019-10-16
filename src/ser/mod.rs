@@ -187,6 +187,10 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 				self.tag_for_next_bytes = ObjectIdentifierAsn1::TAG;
 				value.serialize(self)
 			}
+			BitStringAsn1::NAME => {
+				self.tag_for_next_bytes = BitStringAsn1::TAG;
+				value.serialize(self)
+			}
 			_ => value.serialize(self),
 		}
 	}

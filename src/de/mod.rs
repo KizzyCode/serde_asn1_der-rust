@@ -80,6 +80,8 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 			Utf8String::TAG => self.deserialize_string(visitor),
 			#[cfg(feature = "complex_types")]
 			ObjectIdentifierAsn1::TAG => self.deserialize_seq(visitor),
+			#[cfg(feature = "complex_types")]
+			BitStringAsn1::TAG => self.deserialize_seq(visitor),
 			_ => Err(SerdeAsn1DerError::InvalidData),
 		}
 	}
@@ -156,12 +158,18 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 			OctetString::TAG => visitor.visit_bytes(OctetString::deserialize(&self.buf)?),
 			#[cfg(feature = "complex_types")]
 			ObjectIdentifierAsn1::TAG => visitor.visit_bytes(&self.buf),
+			#[cfg(feature = "complex_types")]
+			BitStringAsn1::TAG => visitor.visit_bytes(&self.buf),
 			_ => Err(SerdeAsn1DerError::InvalidData),
 		}
 	}
 	fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-		if self.next_object()? != OctetString::TAG { Err(SerdeAsn1DerError::InvalidData)? }
-		visitor.visit_byte_buf(OctetString::deserialize(&self.buf)?.to_vec())
+		match self.next_object()? {
+			OctetString::TAG => visitor.visit_byte_buf(OctetString::deserialize(&self.buf)?.to_vec()),
+			#[cfg(feature = "complex_types")]
+			BitStringAsn1::TAG => visitor.visit_byte_buf(self.buf.to_vec()),
+			_ => Err(SerdeAsn1DerError::InvalidData),
+		}
 	}
 	
 	fn deserialize_option<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
