@@ -79,9 +79,9 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 			Sequence::TAG => self.deserialize_seq(visitor),
 			Utf8String::TAG => self.deserialize_string(visitor),
 			#[cfg(feature = "complex_types")]
-			ObjectIdentifierAsn1::TAG => self.deserialize_seq(visitor),
+			ObjectIdentifierAsn1::TAG => self.deserialize_bytes(visitor),
 			#[cfg(feature = "complex_types")]
-			BitStringAsn1::TAG => self.deserialize_seq(visitor),
+			BitStringAsn1::TAG => self.deserialize_byte_buf(visitor),
 			_ => Err(SerdeAsn1DerError::InvalidData),
 		}
 	}
@@ -203,11 +203,6 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 		let (tag, len) = self.next_tag_len()?;
 		match tag {
 			Sequence::TAG => visitor.visit_seq(Sequence::deserialize_lazy(&mut self, len)),
-			#[cfg(feature = "complex_types")]
-			ObjectIdentifierAsn1::TAG => {
-				self.next_object()?;
-				visitor.visit_bytes(&self.buf)
-			},
 			_ => {
 				Err(SerdeAsn1DerError::InvalidData)
 			},
