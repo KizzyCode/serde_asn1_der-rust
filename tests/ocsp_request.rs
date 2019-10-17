@@ -4,7 +4,7 @@ use oid::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_asn1_der::asn1_wrapper::ObjectIdentifierAsn1;
 
-/**
+/****************************************************************************
  * https://tools.ietf.org/html/rfc2560#section-4.1.1
  *
  * OCSPRequest     ::=     SEQUENCE {
@@ -41,7 +41,7 @@ use serde_asn1_der::asn1_wrapper::ObjectIdentifierAsn1;
  * AlgorithmIdentifier  ::=  SEQUENCE  {
  *      algorithm               OBJECT IDENTIFIER,
  *      parameters              ANY DEFINED BY algorithm OPTIONAL }
- */
+ ****************************************************************************/
 // https://access.redhat.com/documentation/en-us/red_hat_certificate_system/9/html/administration_guide/online_certificate_status_protocol_responder
 // https://lapo.it/asn1js/#MEIwQDA-MDwwOjAJBgUrDgMCGgUABBT4cyABkyiCIhU4JpmIBewdDnn8ZgQUbyBZ44kgy35o7xW5BMzM8FTvyTwCAQE
 
@@ -111,6 +111,6 @@ fn ocsp_request() {
     assert_eq!(serialized, encoded_ocsp_request);
 
     let deserialized: OCSPRequest =
-        serde_asn1_der::from_bytes(&serialized).expect("failed deserialization");
+        serde_asn1_der::from_bytes(&encoded_ocsp_request).expect("failed deserialization");
     assert_eq!(deserialized, ocsp_request);
 }

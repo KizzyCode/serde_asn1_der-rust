@@ -89,7 +89,7 @@ impl<'de> Deserializer<'de> {
 		if self.encapsulated {
 			// discard bit string header bytes
 			self.reader.read_one()?; // tag
-			self.reader.read_one()?; // len
+			Length::deserialized(&mut self.reader)?; // len
 			self.reader.read_one()?; // unused bits count
 			self.encapsulated = false;
 		}

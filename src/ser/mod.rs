@@ -78,7 +78,7 @@ impl<'se> Serializer<'se> {
 		let mut written = 0;
 		if self.encapsulated { // encapsulated in a bit string
 			written += self.writer.write_one(BitStringAsn1Container::<()>::TAG)?;
-			written += Length::serialize(encapsulated_size, &mut self.writer)?;
+			written += Length::serialize(encapsulated_size + 1, &mut self.writer)?;
 			written += self.writer.write_one(0x00)?; // no unused bits
 
 			self.encapsulated = false; // reset encapsulation state

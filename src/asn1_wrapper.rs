@@ -122,15 +122,17 @@ where
             E: de::Error,
         {
             if v.len() > 1 {
-                let sign = if v[0] == 0x00 {
-                    Sign::Plus
-                } else {
-                    Sign::Minus
-                };
-                Ok(BigInt::from_bytes_be(sign, &v[1..]))
+               if v[0] == 0x00 {
+                   Ok(BigInt::from_bytes_be(Sign::Plus, &v[1..]))
+               } else {
+                   if v[0] & 0x80 != 0 {
+                       Ok(BigInt::from_bytes_be(Sign::Minus, v))
+                   } else {
+                       Ok(BigInt::from_bytes_be(Sign::Plus, v))
+                   }
+               }
             } else {
-                let int = v[0] as i8;
-                Ok(int.into())
+                Ok(BigInt::from(v[0] as i8))
             }
         }
     }
@@ -173,7 +175,7 @@ where
 /// }.into();
 ///
 /// let buffer = [
-///     0x03, 0x0f, 0x00, // bit string part
+///     0x03, 0x10, 0x00, // bit string part
 ///     0x30, 0x0d, // sequence
 ///     0x02, 0x03, 0x01, 0x47, 0xc6, // integer a
 ///     0x02, 0x02, 0x0e, 0xff, // integer b
@@ -277,7 +279,7 @@ mod tests {
     #[test]
     fn encapsulated_types() {
         {
-            let buffer = [0x03, 0x5, 0x00, 0x02, 0x03, 0x3c, 0x1c, 0x37];
+            let buffer = [0x03, 0x6, 0x00, 0x02, 0x03, 0x3c, 0x1c, 0x37];
             let encapsulated: BitStringAsn1Container<u64> = u64::from(3939383u64).into();
 
             let encoded =
@@ -291,7 +293,7 @@ mod tests {
 
         {
             let buffer = [
-                0x03, 0x10, 0x00, 0x0c, 0x0e, 0x55, 0x54, 0x46, 0x2d, 0x38, 0xe6, 0x96, 0x87, 0xe5,
+                0x03, 0x11, 0x00, 0x0c, 0x0e, 0x55, 0x54, 0x46, 0x2d, 0x38, 0xe6, 0x96, 0x87, 0xe5,
                 0xad, 0x97, 0xe5, 0x88, 0x97,
             ];
             let encapsulated: BitStringAsn1Container<String> = String::from("UTF-8文字列").into();
