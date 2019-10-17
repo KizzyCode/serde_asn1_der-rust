@@ -1,22 +1,9 @@
-#![cfg(feature = "more_types")]
-
-use num_bigint_dig::{BigInt, Sign};
-use oid::prelude::*;
-use serde::{Deserialize, Serialize};
-use serde_asn1_der::asn1_wrapper::*;
-
 /****************************************************************************
  * https://tools.ietf.org/html/rfc5280#section-4.1
  *
  * SubjectPublicKeyInfo  ::=  SEQUENCE  {
  *     algorithm            AlgorithmIdentifier,
  *     subjectPublicKey     BIT STRING  }
- *
- * https://tools.ietf.org/html/rfc5280#section-4.1.1.2
- *
- * AlgorithmIdentifier  ::=  SEQUENCE  {
- *     algorithm               OBJECT IDENTIFIER,
- *     parameters              ANY DEFINED BY algorithm OPTIONAL  }
  *
  * https://tools.ietf.org/html/rfc8017#appendix-A.1
  *
@@ -27,52 +14,24 @@ use serde_asn1_der::asn1_wrapper::*;
  ****************************************************************************/
 // https://lapo.it/asn1js/#MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsiLoIxmXaZAFRBKtHYZhiF8m-pYR-xGIpupvsdDEvKO92D6fIccgVLIW6p6sSNkoXx5J6KDSMbA_chy5M6pRvJkaCXCI4zlCPMYvPhI8OxN3RYPfdQTLpgPywrlfdn2CAum7o4D8nR4NJacB3NfPnS9tsJ2L3p5iHviuTB4xm03IKmPPqsaJy-nXUFC1XS9E_PseVHRuNvKa7WmlwSZngQzKAVSIwqpgCc-oP1pKEeJ0M3LHFo8ao5SuzhfXUIGrPnkUKEE3m7B0b8xXZfP1N6ELoonWDK-RMgYIBaZdgBhPfHxF8KfTHvSzcUzWZojuR-ynaFL9AJK-8RiXnB4CJwIDAQAB
 
+use super::ocsp_request::AlgorithmIdentifier;
+use num_bigint_dig::{BigInt, Sign};
+use oid::prelude::*;
+use serde::{Deserialize, Serialize};
+use serde_asn1_der::asn1_wrapper::*;
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct SubjectPublicKeyInfo {
-    algorithm: AlgorithmIdentifier,
-    subject_public_key: EncapsulatedRSAPublicKey,
+pub struct SubjectPublicKeyInfoRsa {
+    pub algorithm: AlgorithmIdentifier,
+    pub subject_public_key: EncapsulatedRSAPublicKey,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct AlgorithmIdentifier {
-    algorithm: ObjectIdentifierAsn1,
-    parameters: (),
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct RSAPublicKey {
-    modulus: IntegerAsn1,         // n
-    public_exponent: IntegerAsn1, // e
+pub struct RSAPublicKey {
+    pub modulus: IntegerAsn1,         // n
+    pub public_exponent: IntegerAsn1, // e
 }
 type EncapsulatedRSAPublicKey = BitStringAsn1Container<RSAPublicKey>;
-
-macro_rules! check {
-    ($item:ident: $type:ident in $encoded:ident[$start:literal..$end:literal]) => {
-        println!(concat!(stringify!($item), " check..."));
-
-        let encoded = &$encoded[$start..$end];
-
-        let serialized = serde_asn1_der::to_vec(&$item).expect(concat!(
-            "failed ",
-            stringify!($item),
-            " serialization"
-        ));
-        assert_eq!(
-            serialized, encoded,
-            concat!("serialized ", stringify!($item), " doesn't match")
-        );
-
-        let deserialized: $type = serde_asn1_der::from_bytes(encoded).expect(concat!(
-            "failed ",
-            stringify!($item),
-            " deserialization"
-        ));
-        assert_eq!(
-            deserialized, $item,
-            concat!("deserialized ", stringify!($item), " doesn't match")
-        );
-    };
-}
 
 #[test]
 fn subject_public_key_info() {
@@ -138,9 +97,9 @@ fn subject_public_key_info() {
 
     // full encode / decode
 
-    let info = SubjectPublicKeyInfo {
+    let info = SubjectPublicKeyInfoRsa {
         algorithm,
         subject_public_key,
     };
-    check!(info: SubjectPublicKeyInfo in encoded[0..294]);
+    check!(info: SubjectPublicKeyInfoRsa in encoded);
 }

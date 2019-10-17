@@ -3,8 +3,8 @@ use serde::{ Serialize, Deserialize };
 use serde_bytes::ByteBuf;
 use std::fmt::Debug;
 
-include!("read_test_vectors.rs");
-
+mod read_test_vectors;
+use read_test_vectors::*;
 
 struct Primitive<T> {
 	line: usize,
@@ -31,7 +31,7 @@ fn test() {
 	macro_rules! test {
 		($name:expr => $type:ty) => ({
 			let v: Vec<Primitive<$type>> = read_test_vectors!(
-				concat!("serde_primitive_", $name, ".txt")
+				concat!("./test_vectors/serde_primitive_", $name, ".txt")
 					=> Primitive{ line, value, der__ }
 			);
 			v.into_iter().for_each(|v| v.ser().de())
@@ -74,7 +74,7 @@ fn test_err() {
 	macro_rules! test {
 		($name:expr => $type:expr) => ({
 			let v: Vec<PrimitiveErr> = read_test_vectors!(
-				concat!("serde_primitive_", $name, "_err.txt")
+				concat!("test_vectors/serde_primitive_", $name, "_err.txt")
 					=> PrimitiveErr{ line, der__, error }
 			);
 			v.into_iter().for_each(|v| v.test($type))

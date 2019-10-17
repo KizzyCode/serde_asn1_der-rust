@@ -41,9 +41,9 @@ impl ParseStr for Vec<u8> {
 		// Helper to decode a hex-encoded nibble
 		let decode = |nibble: u8| -> u8 {
 			match nibble {
-				n @ b'0'...b'9' =>  n - b'0',
-				n @ b'a'...b'f' => (n - b'a') + 10,
-				n @ b'A'...b'F' => (n - b'A') + 10,
+				n @ b'0'..=b'9' =>  n - b'0',
+				n @ b'a'..=b'f' => (n - b'a') + 10,
+				n @ b'A'..=b'F' => (n - b'A') + 10,
 				n => panic!("Test vector contains invalid hex char \"{:02x}\" @{}", n, line)
 			}
 		};

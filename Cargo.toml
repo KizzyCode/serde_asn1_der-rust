@@ -23,6 +23,7 @@ oid = { git = "https://github.com/bcortier-devolutions/oid", branch = "serde_sup
 [dev-dependencies]
 serde_bytes = "0.10"
 base64 = "0.10"
+pretty_assertions = "0.6"
 
 [features]
 more_types = ["oid", "num-bigint-dig"]

@@ -1,9 +1,3 @@
-#![cfg(feature = "more_types")]
-
-use oid::prelude::*;
-use serde::{Deserialize, Serialize};
-use serde_asn1_der::asn1_wrapper::ObjectIdentifierAsn1;
-
 /****************************************************************************
  * https://tools.ietf.org/html/rfc2560#section-4.1.1
  *
@@ -45,35 +39,39 @@ use serde_asn1_der::asn1_wrapper::ObjectIdentifierAsn1;
 // https://access.redhat.com/documentation/en-us/red_hat_certificate_system/9/html/administration_guide/online_certificate_status_protocol_responder
 // https://lapo.it/asn1js/#MEIwQDA-MDwwOjAJBgUrDgMCGgUABBT4cyABkyiCIhU4JpmIBewdDnn8ZgQUbyBZ44kgy35o7xW5BMzM8FTvyTwCAQE
 
+use oid::prelude::*;
+use serde::{Deserialize, Serialize};
+use serde_asn1_der::asn1_wrapper::ObjectIdentifierAsn1;
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct OCSPRequest {
-    tbs_request: TBSRequest,
+pub struct OCSPRequest {
+    pub tbs_request: TBSRequest,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct TBSRequest {
-    request_list: Vec<Request>,
+pub struct TBSRequest {
+    pub request_list: Vec<Request>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct Request {
-    req_cert: CertID,
+pub struct Request {
+    pub req_cert: CertID,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct CertID {
-    algorithm: AlgorithmIdentifier,
+pub struct CertID {
+    pub algorithm: AlgorithmIdentifier,
     #[serde(with = "serde_bytes")]
-    issuer_name_hash: Vec<u8>,
+    pub issuer_name_hash: Vec<u8>,
     #[serde(with = "serde_bytes")]
-    issuer_key_hash: Vec<u8>,
-    serial_number: u32,
+    pub issuer_key_hash: Vec<u8>,
+    pub serial_number: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct AlgorithmIdentifier {
-    algorithm: ObjectIdentifierAsn1,
-    parameters: (),
+pub struct AlgorithmIdentifier {
+    pub algorithm: ObjectIdentifierAsn1,
+    pub parameters: (),
 }
 
 #[test]
@@ -107,10 +105,5 @@ fn ocsp_request() {
         },
     };
 
-    let serialized = serde_asn1_der::to_vec(&ocsp_request).expect("failed serialization");
-    assert_eq!(serialized, encoded_ocsp_request);
-
-    let deserialized: OCSPRequest =
-        serde_asn1_der::from_bytes(&encoded_ocsp_request).expect("failed deserialization");
-    assert_eq!(deserialized, ocsp_request);
+    check!(ocsp_request: OCSPRequest in encoded_ocsp_request);
 }
