@@ -36,7 +36,7 @@ impl UnsignedInteger {
 		
 		// Check first byte (number is signed, has leading zero, ...)
 		let data = match data[0] {
-			128...255 => Err(SerdeAsn1DerError::UnsupportedValue)?,
+			128..=255 => Err(SerdeAsn1DerError::UnsupportedValue)?,
 			0 if data.len() > 1 && data[1] < 128 => Err(SerdeAsn1DerError::InvalidData)?,
 			0 => &data[1..],
 			_ => data

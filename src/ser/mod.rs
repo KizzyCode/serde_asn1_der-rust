@@ -44,7 +44,9 @@ pub fn to_writer<T: ?Sized + Serialize>(value: &T, writer: impl Write) -> Result
 /// An ASN.1-DER serializer for `serde`
 pub struct Serializer<'se> {
 	writer: Box<dyn Write + 'se>,
+	#[cfg(feature = "complex_types")]
 	tag_for_next_bytes: u8,
+	#[cfg(feature = "complex_types")]
 	encapsulated: bool,
 }
 impl<'se> Serializer<'se> {
@@ -57,14 +59,21 @@ impl<'se> Serializer<'se> {
 		Self::new_to_writer(Cursor::new(buf))
 	}
 	/// Creates a new serializer that writes to `writer`
+	#[cfg(feature = "complex_types")]
 	pub fn new_to_writer(writer: impl Write + 'se) -> Self {
-		Self{
+		Self {
 			writer: Box::new(writer),
 			tag_for_next_bytes: 0x04,
 			encapsulated: false
 		}
 	}
 
+	#[cfg(not(feature = "complex_types"))]
+	pub fn new_to_writer(writer: impl Write + 'se) -> Self {
+		Self { writer: Box::new(writer) }
+	}
+
+	#[cfg(feature = "complex_types")]
 	fn __write_encapsulator(&mut self, encapsulated_size: usize) -> Result<usize> {
 		let mut written = 0;
 		if self.encapsulated { // encapsulated in a bit string
@@ -77,6 +86,13 @@ impl<'se> Serializer<'se> {
 		Ok(written)
 	}
 
+	#[cfg(not(feature = "complex_types"))]
+	#[inline]
+	fn __write_encapsulator(&self, _: usize) -> Result<usize> {
+		Ok(0)
+	}
+
+	#[cfg(feature = "complex_types")]
 	fn __serialize_bytes_with_tag(&mut self, bytes: &[u8]) -> Result<usize> {
 		let mut written = self.__write_encapsulator(bytes.len() + Length::encoded_len(bytes.len()) + 1)?;
 
@@ -87,6 +103,15 @@ impl<'se> Serializer<'se> {
 
 		self.tag_for_next_bytes = 0x04; // reset to octet string
 
+		Ok(written)
+	}
+
+	#[cfg(not(feature = "complex_types"))]
+	fn __serialize_bytes_with_tag(&mut self, bytes: &[u8]) -> Result<usize> {
+		// Write tag, length and data
+		let mut written = self.writer.write_one(0x04)?;
+		written += Length::serialize(bytes.len(), &mut self.writer)?;
+		written += self.writer.write_exact(bytes)?;
 		Ok(written)
 	}
 }
@@ -205,6 +230,10 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 			}
 			BitStringAsn1::NAME => {
 				self.tag_for_next_bytes = BitStringAsn1::TAG;
+				value.serialize(self)
+			}
+			IntegerAsn1::NAME => {
+				self.tag_for_next_bytes = IntegerAsn1::TAG;
 				value.serialize(self)
 			}
 			BitStringAsn1Container::<()>::NAME => {
