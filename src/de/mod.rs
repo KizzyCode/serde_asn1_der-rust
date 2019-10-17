@@ -34,7 +34,8 @@ pub fn from_reader<'a, T: Deserialize<'a>>(reader: impl Read + 'a) -> Result<T> 
 /// An ASN.1-DER deserializer for `serde`
 pub struct Deserializer<'de> {
 	reader: PeekableReader<Box<dyn Read + 'de>>,
-	buf: Vec<u8>
+	buf: Vec<u8>,
+	encapsulated: bool,
 }
 impl<'de> Deserializer<'de> {
 	/// Creates a new deserializer over `bytes`
@@ -43,7 +44,11 @@ impl<'de> Deserializer<'de> {
 	}
 	/// Creates a new deserializer for `reader`
 	pub fn new_from_reader(reader: impl Read + 'de) -> Self {
-		Self{ reader: PeekableReader::new(Box::new(reader)), buf: Vec::new() }
+		Self {
+			reader: PeekableReader::new(Box::new(reader)),
+			buf: Vec::new(),
+			encapsulated: false
+		}
 	}
 	
 	/// Reads tag and length of the next DER object
@@ -55,6 +60,8 @@ impl<'de> Deserializer<'de> {
 	}
 	/// Reads the next DER object into `self.buf` and returns the tag
 	fn next_object(&mut self) -> Result<u8> {
+		self.decapsulate()?;
+
 		// Read type
 		let tag = self.reader.read_one()?;
 		
@@ -64,6 +71,16 @@ impl<'de> Deserializer<'de> {
 		self.reader.read_exact(&mut self.buf)?;
 		
 		Ok(tag)
+	}
+	fn decapsulate(&mut self) -> Result<()> {
+		if self.encapsulated {
+			// discard bit string header bytes
+			self.reader.read_one()?; // tag
+			self.reader.read_one()?; // len
+			self.reader.read_one()?; // unused bits count
+			self.encapsulated = false;
+		}
+		Ok(())
 	}
 }
 impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
@@ -192,13 +209,18 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	// As is done here, serializers are encouraged to treat newtype structs as
 	// insignificant wrappers around the data they contain. That means not
 	// parsing anything other than the contained value.
-	fn deserialize_newtype_struct<V: Visitor<'de>>(self, _name: &'static str, visitor: V)
+	fn deserialize_newtype_struct<V: Visitor<'de>>(self, name: &'static str, visitor: V)
 		-> Result<V::Value>
 	{
+		if name == BitStringAsn1Container::<()>::NAME {
+			self.encapsulated = true;
+		}
 		visitor.visit_newtype_struct(self)
 	}
 	
 	fn deserialize_seq<V: Visitor<'de>>(mut self, visitor: V) -> Result<V::Value> {
+		self.decapsulate();
+
 		// Read tag and length
 		let (tag, len) = self.next_tag_len()?;
 		match tag {

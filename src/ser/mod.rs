@@ -45,6 +45,7 @@ pub fn to_writer<T: ?Sized + Serialize>(value: &T, writer: impl Write) -> Result
 pub struct Serializer<'se> {
 	writer: Box<dyn Write + 'se>,
 	tag_for_next_bytes: u8,
+	encapsulated: bool,
 }
 impl<'se> Serializer<'se> {
 	/// Creates a new serializer that writes to `buf`
@@ -60,12 +61,27 @@ impl<'se> Serializer<'se> {
 		Self{
 			writer: Box::new(writer),
 			tag_for_next_bytes: 0x04,
+			encapsulated: false
 		}
 	}
 
-	fn serialize_bytes_with_tag(&mut self, bytes: &[u8]) -> Result<usize> {
+	fn __write_encapsulator(&mut self, encapsulated_size: usize) -> Result<usize> {
+		let mut written = 0;
+		if self.encapsulated { // encapsulated in a bit string
+			written += self.writer.write_one(BitStringAsn1Container::<()>::TAG)?;
+			written += Length::serialize(encapsulated_size, &mut self.writer)?;
+			written += self.writer.write_one(0x00)?; // no unused bits
+
+			self.encapsulated = false; // reset encapsulation state
+		}
+		Ok(written)
+	}
+
+	fn __serialize_bytes_with_tag(&mut self, bytes: &[u8]) -> Result<usize> {
+		let mut written = self.__write_encapsulator(bytes.len() + Length::encoded_len(bytes.len()) + 1)?;
+
 		// Write tag, length and data
-		let mut written = self.writer.write_one(self.tag_for_next_bytes)?;
+		written += self.writer.write_one(self.tag_for_next_bytes)?;
 		written += Length::serialize(bytes.len(), &mut self.writer)?;
 		written += self.writer.write_exact(bytes)?;
 
@@ -88,7 +104,7 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 	type SerializeStructVariant = Self;
 	
 	fn serialize_bool(self, v: bool) -> Result<Self::Ok> {
-		Boolean::serialize(v, &mut self.writer)
+		Boolean::serialize(v, self)
 	}
 	
 	fn serialize_i8(self, _v: i8) -> Result<Self::Ok> {
@@ -126,7 +142,7 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 	}
 	//noinspection RsTraitImplementation
 	fn serialize_u128(self, v: u128) -> Result<Self::Ok> {
-		UnsignedInteger::serialize(v, &mut self.writer)
+		UnsignedInteger::serialize(v, self)
 	}
 	
 	fn serialize_f32(self, _v: f32) -> Result<Self::Ok> {
@@ -142,15 +158,15 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 		self.serialize_str(v.encode_utf8(&mut buf))
 	}
 	fn serialize_str(self, v: &str) -> Result<Self::Ok> {
-		Utf8String::serialize(v, &mut self.writer)
+		Utf8String::serialize(v, self)
 	}
 	
 	fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok> {
-		self.serialize_bytes_with_tag(v)
+		self.__serialize_bytes_with_tag(v)
 	}
 	
 	fn serialize_none(self) -> Result<Self::Ok> {
-		Null::serialize(&mut self.writer)
+		Null::serialize(self)
 	}
 	fn serialize_some<T: ?Sized + Serialize>(self, _value: &T) -> Result<Self::Ok> {
 		Err(SerdeAsn1DerError::UnsupportedType)
@@ -189,6 +205,10 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 			}
 			BitStringAsn1::NAME => {
 				self.tag_for_next_bytes = BitStringAsn1::TAG;
+				value.serialize(self)
+			}
+			BitStringAsn1Container::<()>::NAME => {
+				self.encapsulated = true;
 				value.serialize(self)
 			}
 			_ => value.serialize(self),

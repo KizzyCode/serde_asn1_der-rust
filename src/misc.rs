@@ -133,6 +133,14 @@ impl Length {
 
 		Ok(written)
 	}
+
+	/// Returns how many bytes are going to be needed to encode `len`.
+	pub fn encoded_len(len: usize) -> usize {
+		match len {
+			0..=127 => 1,
+			_ => 1 + USIZE_LEN - (len.leading_zeros() / 8) as usize,
+		}
+	}
 }
 
 #[cfg(test)]

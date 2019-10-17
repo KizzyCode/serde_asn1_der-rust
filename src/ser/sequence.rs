@@ -27,9 +27,11 @@ impl<'a, 'se> Sequence<'a, 'se> {
 	fn finalize(self) -> Result<usize> {
 		// Reclaim buffer
 		let buf = self.buf.into_inner();
-		
+
+		let mut written = self.ser.__write_encapsulator(Length::encoded_len(buf.len()) + buf.len() + 1)?;
+
 		// Write tag, length and value
-		let mut written = self.ser.writer.write_one(0x30)?;
+		written += self.ser.writer.write_one(0x30)?;
 		written += Length::serialize(buf.len(), &mut self.ser.writer)?;
 		written += self.ser.writer.write_exact(&buf)?;
 		

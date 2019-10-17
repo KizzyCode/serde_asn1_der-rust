@@ -46,6 +46,78 @@ macro_rules! asn1_wrapper {
 asn1_wrapper! { struct BitStringAsn1(BitString),               0x03 }
 asn1_wrapper! { struct ObjectIdentifierAsn1(ObjectIdentifier), 0x06 }
 
+/// A BitString encapsulating things.
+/// Useful to perform a full serialization / deserialization in one pass
+/// instead of using `BitStringAsn1` manually.
+///
+/// Examples
+/// ```
+/// use serde_asn1_der::asn1_wrapper::BitStringAsn1Container;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Serialize, Deserialize, Debug, PartialEq)]
+/// struct MyType {
+///     a: u32,
+///     b: u16,
+///     c: u16,
+/// }
+///
+/// type MyTypeEncapsulated = BitStringAsn1Container<MyType>;
+///
+/// let encapsulated: MyTypeEncapsulated = MyType {
+///     a: 83910,
+///     b: 3839,
+///     c: 4023,
+/// }.into();
+///
+/// let buffer = [
+///     0x03, 0x0f, 0x00, // bit string part
+///     0x30, 0x0d, // sequence
+///     0x02, 0x03, 0x01, 0x47, 0xc6, // integer a
+///     0x02, 0x02, 0x0e, 0xff, // integer b
+///     0x02, 0x02, 0x0f, 0xb7, // integer c
+/// ];
+///
+/// let encoded = serde_asn1_der::to_vec(&encapsulated).expect("couldn't serialize");
+/// assert_eq!(
+///     encoded,
+///     buffer,
+/// );
+///
+/// let decoded: MyTypeEncapsulated = serde_asn1_der::from_bytes(&buffer).expect("couldn't deserialize");
+/// assert_eq!(
+///     decoded,
+///     encapsulated,
+/// );
+/// ```
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct BitStringAsn1Container<Encapsulated>(Encapsulated);
+
+impl<Encapsulated> BitStringAsn1Container<Encapsulated> {
+    pub const TAG: u8 = 0x03;
+    pub(crate) const NAME: &'static str = "BitStringAsn1Container";
+}
+
+impl<Encapsulated> From<Encapsulated> for BitStringAsn1Container<Encapsulated> {
+    fn from(wrapped: Encapsulated) -> Self {
+        Self(wrapped)
+    }
+}
+
+impl<Encapsulated> Deref for BitStringAsn1Container<Encapsulated> {
+    type Target = Encapsulated;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<Encapsulated> DerefMut for BitStringAsn1Container<Encapsulated> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,15 +133,16 @@ mod tests {
         assert_eq!(parsed_oid, oid);
 
         let encoded_oid = crate::to_vec(&oid).expect("serialization failed");
-        assert_eq!(encoded_oid, oid_buffer.to_vec());
+        assert_eq!(encoded_oid, oid_buffer);
     }
 
     #[test]
     fn bit_string() {
         #[rustfmt::skip]
         let bit_string_buffer = [
-            0x03, 0x81, 0x81,
-            0x00,
+            0x03, // tag
+            0x81, 0x81, // length
+            0x00, // unused bits
             0x47, 0xeb, 0x99, 0x5a, 0xdf, 0x9e, 0x70, 0x0d, 0xfb, 0xa7, 0x31, 0x32, 0xc1, 0x5f, 0x5c, 0x24,
             0xc2, 0xe0, 0xbf, 0xc6, 0x24, 0xaf, 0x15, 0x66, 0x0e, 0xb8, 0x6a, 0x2e, 0xab, 0x2b, 0xc4, 0x97,
             0x1f, 0xe3, 0xcb, 0xdc, 0x63, 0xa5, 0x25, 0xec, 0xc7, 0xb4, 0x28, 0x61, 0x66, 0x36, 0xa1, 0x31,
@@ -87,5 +160,34 @@ mod tests {
 
         let encoded_bit_string = crate::to_vec(&bit_string).expect("serialization failed");
         assert_eq!(encoded_bit_string, bit_string_buffer.to_vec());
+    }
+
+    #[test]
+    fn encapsulated_types() {
+        {
+            let buffer = [0x03, 0x5, 0x00, 0x02, 0x03, 0x3c, 0x1c, 0x37];
+            let encapsulated: BitStringAsn1Container<u64> = u64::from(3939383u64).into();
+
+            let encoded = crate::to_vec(&encapsulated).expect("encapsulated vec serialization failed");
+            assert_eq!(encoded, buffer);
+
+            let decoded: BitStringAsn1Container<u64> = crate::from_bytes(&buffer).expect("encapsulated vec deserialization failed");
+            assert_eq!(decoded, encapsulated);
+        }
+
+        {
+            let buffer = [
+                0x03, 0x10, 0x00, 0x0c, 0x0e, 0x55, 0x54, 0x46,
+                0x2d, 0x38, 0xe6, 0x96, 0x87, 0xe5, 0xad, 0x97,
+                0xe5, 0x88, 0x97
+            ];
+            let encapsulated: BitStringAsn1Container<String> = String::from("UTF-8文字列").into();
+
+            let encoded = crate::to_vec(&encapsulated).expect("encapsulated utf8 string serialization failed");
+            assert_eq!(encoded, buffer);
+
+            let decoded: BitStringAsn1Container<String> = crate::from_bytes(&buffer).expect("encapsulated utf8 string deserialization failed");
+            assert_eq!(decoded, encapsulated);
+        }
     }
 }

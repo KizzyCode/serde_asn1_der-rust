@@ -1,9 +1,4 @@
-use crate::{
-	Result,
-	misc::{ WriteExt, Length }
-};
-use std::io::Write;
-
+use crate::{Result, misc::{WriteExt, Length}, Serializer};
 
 /// A trait that allows you to map all unsigned integers to a `u128`
 pub trait UInt: Sized + Copy {
@@ -27,22 +22,25 @@ impl_uint!(usize, u128, u64, u32, u16, u8);
 pub struct UnsignedInteger;
 impl UnsignedInteger {
 	/// Serializes `value` into `writer`
-	pub fn serialize<T: UInt>(value: T, mut writer: impl Write) -> Result<usize> {
+	pub fn serialize<T: UInt>(value: T, ser: &mut Serializer) -> Result<usize> {
 		// Convert the value and compute the amount of bytes to skip
 		let value = value.into_u128();
 		let skip = match value.leading_zeros() as usize {
 			n if n % 8 == 0 => n / 8,
 			n => (n / 8) + 1
 		};
-		
+		let length = 17 - skip;
+
+		let mut written = ser.__write_encapsulator(Length::encoded_len(length) + length + 1)?;
+
 		// Write tag and length
-		let mut written = writer.write_one(0x02)?;
-		written += Length::serialize(17 - skip, &mut writer)?;
+		written += ser.writer.write_one(0x02)?;
+		written += Length::serialize(17 - skip, &mut ser.writer)?;
 		
 		// Serialize the value and write the bytes
 		let mut bytes = [0; 17];
 		bytes[1..].copy_from_slice(&value.to_be_bytes());
-		written += writer.write_exact(&bytes[skip..])?;
+		written += ser.writer.write_exact(&bytes[skip..])?;
 		
 		Ok(written)
 	}
