@@ -1,4 +1,4 @@
-#![cfg(feature = "complex_types")]
+#![cfg(feature = "more_types")]
 
 use oid::prelude::*;
 use serde::{Deserialize, Serialize};

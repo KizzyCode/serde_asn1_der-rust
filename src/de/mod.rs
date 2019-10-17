@@ -5,7 +5,7 @@ mod octet_string;
 mod sequence;
 mod utf8_string;
 
-#[cfg(feature = "complex_types")]
+#[cfg(feature = "more_types")]
 use crate::asn1_wrapper::*;
 use crate::{
 	Result, SerdeAsn1DerError,
@@ -35,7 +35,7 @@ pub fn from_reader<'a, T: Deserialize<'a>>(reader: impl Read + 'a) -> Result<T> 
 pub struct Deserializer<'de> {
 	reader: PeekableReader<Box<dyn Read + 'de>>,
 	buf: Vec<u8>,
-	#[cfg(feature = "complex_types")]
+	#[cfg(feature = "more_types")]
 	encapsulated: bool,
 }
 impl<'de> Deserializer<'de> {
@@ -44,7 +44,7 @@ impl<'de> Deserializer<'de> {
 		Self::new_from_reader(Cursor::new(bytes))
 	}
 	/// Creates a new deserializer for `reader`
-	#[cfg(feature = "complex_types")]
+	#[cfg(feature = "more_types")]
 	pub fn new_from_reader(reader: impl Read + 'de) -> Self {
 		Self {
 			reader: PeekableReader::new(Box::new(reader)),
@@ -53,7 +53,7 @@ impl<'de> Deserializer<'de> {
 		}
 	}
 
-	#[cfg(not(feature = "complex_types"))]
+	#[cfg(not(feature = "more_types"))]
 	pub fn new_from_reader(reader: impl Read + 'de) -> Self {
 		Self {
 			reader: PeekableReader::new(Box::new(reader)),
@@ -70,7 +70,7 @@ impl<'de> Deserializer<'de> {
 	}
 	/// Reads the next DER object into `self.buf` and returns the tag
 	fn next_object(&mut self) -> Result<u8> {
-		#[cfg(feature = "complex_types")]
+		#[cfg(feature = "more_types")]
 		self.decapsulate()?;
 
 		// Read type
@@ -84,7 +84,7 @@ impl<'de> Deserializer<'de> {
 		Ok(tag)
 	}
 
-	#[cfg(feature = "complex_types")]
+	#[cfg(feature = "more_types")]
 	fn decapsulate(&mut self) -> Result<()> {
 		if self.encapsulated {
 			// discard bit string header bytes
@@ -108,9 +108,9 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 			OctetString::TAG => self.deserialize_byte_buf(visitor),
 			Sequence::TAG => self.deserialize_seq(visitor),
 			Utf8String::TAG => self.deserialize_string(visitor),
-			#[cfg(feature = "complex_types")]
+			#[cfg(feature = "more_types")]
 			ObjectIdentifierAsn1::TAG => self.deserialize_bytes(visitor),
-			#[cfg(feature = "complex_types")]
+			#[cfg(feature = "more_types")]
 			BitStringAsn1::TAG => self.deserialize_byte_buf(visitor),
 			_ => Err(SerdeAsn1DerError::InvalidData),
 		}
@@ -186,11 +186,11 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	fn deserialize_bytes<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		match self.next_object()? {
 			OctetString::TAG => visitor.visit_bytes(OctetString::deserialize(&self.buf)?),
-			#[cfg(feature = "complex_types")]
+			#[cfg(feature = "more_types")]
 			ObjectIdentifierAsn1::TAG => visitor.visit_bytes(&self.buf),
-			#[cfg(feature = "complex_types")]
+			#[cfg(feature = "more_types")]
 			BitStringAsn1::TAG => visitor.visit_bytes(&self.buf),
-			#[cfg(feature = "complex_types")]
+			#[cfg(feature = "more_types")]
 			IntegerAsn1::TAG => visitor.visit_bytes(&self.buf),
 			_ => Err(SerdeAsn1DerError::InvalidData),
 		}
@@ -198,7 +198,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		match self.next_object()? {
 			OctetString::TAG => visitor.visit_byte_buf(OctetString::deserialize(&self.buf)?.to_vec()),
-			#[cfg(feature = "complex_types")]
+			#[cfg(feature = "more_types")]
 			BitStringAsn1::TAG => visitor.visit_byte_buf(self.buf.to_vec()),
 			_ => Err(SerdeAsn1DerError::InvalidData),
 		}
@@ -224,7 +224,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	// As is done here, serializers are encouraged to treat newtype structs as
 	// insignificant wrappers around the data they contain. That means not
 	// parsing anything other than the contained value.
-	#[cfg(feature = "complex_types")]
+	#[cfg(feature = "more_types")]
 	fn deserialize_newtype_struct<V: Visitor<'de>>(self, name: &'static str, visitor: V)
 		-> Result<V::Value>
 	{
@@ -237,7 +237,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 		}
 	}
 
-	#[cfg(not(feature = "complex_types"))]
+	#[cfg(not(feature = "more_types"))]
 	fn deserialize_newtype_struct<V: Visitor<'de>>(self, _name: &'static str, visitor: V)
 		-> Result<V::Value>
 	{
@@ -245,7 +245,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	}
 	
 	fn deserialize_seq<V: Visitor<'de>>(mut self, visitor: V) -> Result<V::Value> {
-		#[cfg(feature = "complex_types")]
+		#[cfg(feature = "more_types")]
 		self.decapsulate()?;
 
 		// Read tag and length

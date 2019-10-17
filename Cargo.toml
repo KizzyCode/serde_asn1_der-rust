@@ -25,7 +25,7 @@ serde_bytes = "0.10"
 base64 = "0.10"
 
 [features]
-complex_types = ["oid", "num-bigint-dig"]
+more_types = ["oid", "num-bigint-dig"]
 
 [profile.release]
 overflow-checks = true

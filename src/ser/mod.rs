@@ -4,7 +4,7 @@ mod null;
 mod sequence;
 mod utf8_string;
 
-#[cfg(feature = "complex_types")]
+#[cfg(feature = "more_types")]
 use crate::asn1_wrapper::*;
 use crate::{
 	Result, SerdeAsn1DerError,
@@ -44,9 +44,9 @@ pub fn to_writer<T: ?Sized + Serialize>(value: &T, writer: impl Write) -> Result
 /// An ASN.1-DER serializer for `serde`
 pub struct Serializer<'se> {
 	writer: Box<dyn Write + 'se>,
-	#[cfg(feature = "complex_types")]
+	#[cfg(feature = "more_types")]
 	tag_for_next_bytes: u8,
-	#[cfg(feature = "complex_types")]
+	#[cfg(feature = "more_types")]
 	encapsulated: bool,
 }
 impl<'se> Serializer<'se> {
@@ -59,7 +59,7 @@ impl<'se> Serializer<'se> {
 		Self::new_to_writer(Cursor::new(buf))
 	}
 	/// Creates a new serializer that writes to `writer`
-	#[cfg(feature = "complex_types")]
+	#[cfg(feature = "more_types")]
 	pub fn new_to_writer(writer: impl Write + 'se) -> Self {
 		Self {
 			writer: Box::new(writer),
@@ -68,12 +68,12 @@ impl<'se> Serializer<'se> {
 		}
 	}
 
-	#[cfg(not(feature = "complex_types"))]
+	#[cfg(not(feature = "more_types"))]
 	pub fn new_to_writer(writer: impl Write + 'se) -> Self {
 		Self { writer: Box::new(writer) }
 	}
 
-	#[cfg(feature = "complex_types")]
+	#[cfg(feature = "more_types")]
 	fn __write_encapsulator(&mut self, encapsulated_size: usize) -> Result<usize> {
 		let mut written = 0;
 		if self.encapsulated { // encapsulated in a bit string
@@ -86,13 +86,13 @@ impl<'se> Serializer<'se> {
 		Ok(written)
 	}
 
-	#[cfg(not(feature = "complex_types"))]
+	#[cfg(not(feature = "more_types"))]
 	#[inline]
 	fn __write_encapsulator(&self, _: usize) -> Result<usize> {
 		Ok(0)
 	}
 
-	#[cfg(feature = "complex_types")]
+	#[cfg(feature = "more_types")]
 	fn __serialize_bytes_with_tag(&mut self, bytes: &[u8]) -> Result<usize> {
 		let mut written = self.__write_encapsulator(bytes.len() + Length::encoded_len(bytes.len()) + 1)?;
 
@@ -106,7 +106,7 @@ impl<'se> Serializer<'se> {
 		Ok(written)
 	}
 
-	#[cfg(not(feature = "complex_types"))]
+	#[cfg(not(feature = "more_types"))]
 	fn __serialize_bytes_with_tag(&mut self, bytes: &[u8]) -> Result<usize> {
 		// Write tag, length and data
 		let mut written = self.writer.write_one(0x04)?;
@@ -212,14 +212,14 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 		Err(SerdeAsn1DerError::UnsupportedType)
 	}
 
-	#[cfg(not(feature = "complex_types"))]
+	#[cfg(not(feature = "more_types"))]
 	fn serialize_newtype_struct<T: ?Sized + Serialize>(self, _name: &'static str, value: &T)
 		-> Result<Self::Ok>
 	{
 		value.serialize(self)
 	}
 
-	#[cfg(feature = "complex_types")]
+	#[cfg(feature = "more_types")]
 	fn serialize_newtype_struct<T: ?Sized + Serialize>(mut self, name: &'static str, value: &T)
 		-> Result<Self::Ok>
 	{
