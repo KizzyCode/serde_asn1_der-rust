@@ -58,9 +58,138 @@ use crate::pki_tests::ocsp_request::AlgorithmIdentifier;
 use crate::pki_tests::rsa_public_key::{RSAPublicKey, SubjectPublicKeyInfoRsa};
 use num_bigint_dig::{BigInt, Sign};
 use oid::prelude::*;
+use serde::de;
+use serde::{Deserialize, Serialize};
+use serde_asn1_der::asn1_wrapper::{
+    ApplicationTag0, ApplicationTag3, Asn1SequenceOf, Asn1SetOf, BitStringAsn1, DateAsn1,
+    ObjectIdentifierAsn1,
+};
+use serde_asn1_der::bit_string::BitString;
+use std::fmt;
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct Certificate {
+    pub tbs_certificate: TBSCertificate,
+    pub signature_algorithm: AlgorithmIdentifier,
+    pub signature_value: BitStringAsn1,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct TBSCertificate {
+    pub version: ApplicationTag0<Version>,
+    pub serial_number: u128,
+    pub signature: AlgorithmIdentifier,
+    pub issuer: Name,
+    pub validity: Validity,
+    pub subject: Name,
+    pub subject_public_key_info: SubjectPublicKeyInfoRsa,
+    pub extensions: ApplicationTag3<Extensions>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct Version(#[serde(deserialize_with = "deserialize_optional_version")] u8);
+
+const VERSION_DEFAULT: u8 = 1;
+pub fn deserialize_optional_version<'de, D>(d: D) -> Result<u8, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    struct Visitor;
+
+    impl<'de> de::Visitor<'de> for Visitor {
+        type Value = u8;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(formatter, "nothing or a valid version number")
+        }
+
+        fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            if v > 2 {
+                Err(E::invalid_value(
+                    de::Unexpected::Other("invalid version number"),
+                    &"a valid buffer representing an OID",
+                ))
+            } else {
+                Ok(v)
+            }
+        }
+    }
+
+    match d.deserialize_u8(Visitor) {
+        Err(err) if err.to_string().as_str() == "InvalidData" => Ok(VERSION_DEFAULT),
+        result => result,
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct AttributeTypeAndValue {
+    ty: ObjectIdentifierAsn1,
+    value: String, // hardcoded for ty = 2.5.4.3 (commonName)
+}
+pub type RelativeDistinguishedName = Asn1SetOf<AttributeTypeAndValue>;
+pub type Name = Asn1SequenceOf<RelativeDistinguishedName>;
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Validity {
+    not_before: DateAsn1,
+    not_after: DateAsn1,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Extensions(Vec<Extension>);
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+struct Extension {
+    extn_id: ObjectIdentifierAsn1,
+    #[serde(
+        deserialize_with = "deserialize_optional_critical",
+        skip_serializing_if = "critical_is_default"
+    )]
+    critical: bool,
+    #[serde(with = "serde_bytes")]
+    extn_value: Vec<u8>,
+}
+
+const CRITICAL_DEFAULT: bool = false;
+fn critical_is_default(critical: &bool) -> bool {
+    *critical == CRITICAL_DEFAULT
+}
+pub fn deserialize_optional_critical<'de, D>(d: D) -> Result<bool, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    struct Visitor;
+
+    impl<'de> de::Visitor<'de> for Visitor {
+        type Value = bool;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(formatter, "nothing or a valid ASN.1 boolean")
+        }
+
+        fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(v)
+        }
+    }
+
+    // attempts to deserialize a boolean, if it doesn't work
+    // (because no boolean is present) use the default value.
+    match d.deserialize_bool(Visitor) {
+        Err(err) if err.to_string().as_str() == "InvalidData" => Ok(CRITICAL_DEFAULT),
+        result => result,
+    }
+}
 
 #[test]
 fn x509_v3_certificate() {
+    use chrono::naive::NaiveDate;
+
     let encoded = base64::decode(
         "MIIEGjCCAgKgAwIBAgIEN8NXxDANBgkqhkiG9w0BAQsFADAiMSAwHgYDVQQ\
          DDBdjb250b3NvLmxvY2FsIEF1dGhvcml0eTAeFw0xOTEwMTcxNzQxMjhaFw0yMjEwM\
@@ -87,6 +216,36 @@ fn x509_v3_certificate() {
     )
     .expect("invalid base64");
 
+    // Issuer
+
+    let issuer: Name = Asn1SequenceOf(vec![Asn1SetOf(vec![AttributeTypeAndValue {
+        ty: ObjectIdentifier::try_from("2.5.4.3").unwrap().into(),
+        value: "contoso.local Authority".into(),
+    }])]);
+    check!(issuer: Name in encoded[34..70]);
+
+    // Validity
+
+    let validity = Validity {
+        not_before: NaiveDate::from_ymd(2019, 10, 17)
+            .and_hms(17, 41, 28)
+            .timestamp()
+            .into(),
+        not_after: NaiveDate::from_ymd(2022, 10, 16)
+            .and_hms(17, 41, 28)
+            .timestamp()
+            .into(),
+    };
+    check!(validity: Validity in encoded[70..102]);
+
+    // Subject
+
+    let subject: Name = Asn1SequenceOf(vec![Asn1SetOf(vec![AttributeTypeAndValue {
+        ty: ObjectIdentifier::try_from("2.5.4.3").unwrap().into(),
+        value: "test.contoso.local".into(),
+    }])]);
+    check!(subject: Name in encoded[102..133]);
+
     // SubjectPublicKeyInfo
 
     let rsa_encryption = ObjectIdentifier::try_from("1.2.840.113549.1.1.1").unwrap();
@@ -96,14 +255,77 @@ fn x509_v3_certificate() {
             parameters: (),
         },
         subject_public_key: RSAPublicKey {
-            modulus: BigInt::from_bytes_be(
-                Sign::Plus,
-                &encoded[165..422],
-            )
-            .into(),
+            modulus: BigInt::from_bytes_be(Sign::Plus, &encoded[165..422]).into(),
             public_exponent: BigInt::from(65537).into(),
         }
         .into(),
     };
     check!(subject_public_key_info: SubjectPublicKeyInfoRsa in encoded[133..427]);
+
+    // Extensions
+
+    let basic_constraints = ObjectIdentifier::try_from("2.5.29.19").unwrap();
+    let key_usage = ObjectIdentifier::try_from("2.5.29.15").unwrap();
+    let subject_key_identifier = ObjectIdentifier::try_from("2.5.29.14").unwrap();
+    let authority_key_identifier = ObjectIdentifier::try_from("2.5.29.35").unwrap();
+    let extensions = Extensions(vec![
+        Extension {
+            extn_id: basic_constraints.into(),
+            critical: false,
+            extn_value: encoded[440..442].to_vec(),
+        },
+        Extension {
+            extn_id: key_usage.into(),
+            critical: true,
+            extn_value: encoded[454..458].to_vec(),
+        },
+        Extension {
+            extn_id: subject_key_identifier.into(),
+            critical: false,
+            extn_value: encoded[467..489].to_vec(),
+        },
+        Extension {
+            extn_id: authority_key_identifier.into(),
+            critical: false,
+            extn_value: encoded[498..522].to_vec(),
+        },
+    ]);
+    check!(extensions: Extensions in encoded[429..522]);
+
+    // TBSCertificate
+
+    let tbs_certificate = TBSCertificate {
+        version: ApplicationTag0(Version(2)),
+        serial_number: 935548868,
+        signature: AlgorithmIdentifier {
+            algorithm: ObjectIdentifier::try_from("1.2.840.113549.1.1.11")
+                .unwrap()
+                .into(), // sha256
+            parameters: (),
+        },
+        issuer,
+        validity,
+        subject,
+        subject_public_key_info,
+        extensions: ApplicationTag3(extensions),
+    };
+    check!(tbs_certificate: TBSCertificate in encoded[4..522]);
+
+    // SignatureAlgorithm
+
+    let sha256_oid = ObjectIdentifier::try_from("1.2.840.113549.1.1.11").unwrap();
+    let signature_algorithm = AlgorithmIdentifier {
+        algorithm: sha256_oid.into(),
+        parameters: (),
+    };
+    check!(signature_algorithm: AlgorithmIdentifier in encoded[522..537]);
+
+    // Full certificate
+
+    let certificate = Certificate {
+        tbs_certificate,
+        signature_algorithm,
+        signature_value: BitString::with_bytes(&encoded[542..1054]).into(),
+    };
+    check!(certificate: Certificate in encoded);
 }

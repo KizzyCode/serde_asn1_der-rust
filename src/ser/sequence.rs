@@ -10,12 +10,17 @@ use crate::misc::WriteExt;
 /// A serializer for sequences
 pub struct Sequence<'a, 'se> {
 	ser: &'a mut Serializer<'se>,
-	buf: Cursor<Vec<u8>>
+	buf: Cursor<Vec<u8>>,
+	tag: u8,
 }
 impl<'a, 'se> Sequence<'a, 'se> {
 	/// Creates a lazy serializer that will serialize the sequence's sub-elements to `writer`
-	pub fn serialize_lazy(ser: &'a mut Serializer<'se>) -> Self {
-		Self{ ser, buf: Cursor::new(Vec::new()) }
+	pub fn serialize_lazy(ser: &'a mut Serializer<'se>, tag: u8) -> Self {
+		Self {
+			ser,
+			buf: Cursor::new(Vec::new()),
+			tag,
+		}
 	}
 	
 	/// Writes the next `value` to the internal buffer
@@ -31,7 +36,7 @@ impl<'a, 'se> Sequence<'a, 'se> {
 		let mut written = self.ser.__write_encapsulator(Length::encoded_len(buf.len()) + buf.len() + 1)?;
 
 		// Write tag, length and value
-		written += self.ser.writer.write_one(0x30)?;
+		written += self.ser.writer.write_one(self.tag)?;
 		written += Length::serialize(buf.len(), &mut self.ser.writer)?;
 		written += self.ser.writer.write_exact(&buf)?;
 		

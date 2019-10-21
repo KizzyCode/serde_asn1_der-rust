@@ -66,6 +66,9 @@ pub mod asn1_wrapper;
 #[cfg(feature = "more_types")]
 pub mod bit_string;
 
+#[macro_use]
+mod debug_log;
+
 mod misc;
 mod ser;
 mod de;

@@ -15,8 +15,14 @@ impl Boolean {
 		
 		// Parse the boolean
 		Ok(match data[0] {
-			0x00 => false,
-			0xff => true,
+			0x00 => {
+				debug_log!("false!");
+				false
+			},
+			0xff => {
+				debug_log!("true!");
+				true
+			},
 			_ => Err(SerdeAsn1DerError::InvalidData)?
 		})
 	}

@@ -1,4 +1,5 @@
 use crate::bit_string::BitString;
+use chrono::{Datelike, Timelike};
 use num_bigint::{BigInt, Sign};
 use oid::ObjectIdentifier;
 use serde::{de, ser, Deserialize, Serialize};
@@ -10,16 +11,50 @@ use std::ops::{Deref, DerefMut};
 macro_rules! asn1_wrapper {
     (struct $wrapper_ty:ident ( $wrapped_ty:ident ), $tag:literal) => {
         /// Wrapper type
+        #[derive(Debug, PartialEq)]
+        pub struct $wrapper_ty(pub $wrapped_ty);
+
+        impls! { $wrapper_ty ( $wrapped_ty ), $tag }
+    };
+    (auto struct $wrapper_ty:ident ( $wrapped_ty:ident ), $tag:literal) => {
+        /// Wrapper type
         #[derive(Serialize, Deserialize, Debug, PartialEq)]
         pub struct $wrapper_ty(pub $wrapped_ty);
 
+        impls! { $wrapper_ty ( $wrapped_ty ), $tag }
+    };
+    (application tag struct $wrapper_ty:ident < $generic:ident >, $tag:literal) => {
+        /// Wrapper type
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        pub struct $wrapper_ty<$generic>(pub $generic);
+
+        impls! { $wrapper_ty < $generic >, $tag }
+    };
+    (auto collection struct $wrapper_ty:ident < T >, $tag:literal) => {
+        /// Asn1 wrapper around a collection of elements of the same type.
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        pub struct $wrapper_ty<T>(
+            #[serde(
+                serialize_with = "serialize_vec",
+                deserialize_with = "deserialize_vec",
+                bound(serialize = "T: Serialize", deserialize = "T: Deserialize<'de>")
+            )]
+            pub Vec<T>,
+        );
+
+        impls! { $wrapper_ty ( Vec < T > ), $tag }
+    };
+}
+
+macro_rules! impls {
+    ($wrapper_ty:ident ( $wrapped_ty:ident ), $tag:literal) => {
         impl $wrapper_ty {
             pub const TAG: u8 = $tag;
             pub(crate) const NAME: &'static str = stringify!($wrapper_ty);
         }
 
         impl From<$wrapped_ty> for $wrapper_ty {
-            fn from(wrapped: $wrapped_ty) -> $wrapper_ty {
+            fn from(wrapped: $wrapped_ty) -> Self {
                 Self(wrapped)
             }
         }
@@ -50,10 +85,168 @@ macro_rules! asn1_wrapper {
             }
         }
     };
+    ($wrapper_ty:ident < $generic:ident >, $tag:literal) => {
+        impl<$generic> $wrapper_ty<$generic> {
+            pub const TAG: u8 = $tag;
+            pub(crate) const NAME: &'static str = stringify!($wrapper_ty);
+        }
+
+        impl<$generic> From<$generic> for $wrapper_ty<$generic> {
+            fn from(wrapped: $generic) -> Self {
+                Self(wrapped)
+            }
+        }
+
+        //-- Into cannot be defined to convert into a generic type (E0119) --
+
+        impl<$generic> Deref for $wrapper_ty<$generic> {
+            type Target = $generic;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl<$generic> DerefMut for $wrapper_ty<$generic> {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+
+        impl<$generic> PartialEq<$generic> for $wrapper_ty<$generic>
+        where
+            $generic: PartialEq,
+        {
+            fn eq(&self, other: &$generic) -> bool {
+                self.0.eq(other)
+            }
+        }
+    };
+    ($wrapper_ty:ident ( $wrapped_ty:ident < $generic:ident > ), $tag:literal) => {
+        impl<$generic> $wrapper_ty<$generic> {
+            pub const TAG: u8 = $tag;
+            pub(crate) const NAME: &'static str = stringify!($wrapper_ty);
+        }
+
+        impl<$generic> From<$wrapped_ty<$generic>> for $wrapper_ty<$generic> {
+            fn from(wrapped: $wrapped_ty<$generic>) -> Self {
+                Self(wrapped)
+            }
+        }
+
+        impl<$generic> Into<$wrapped_ty<$generic>> for $wrapper_ty<$generic> {
+            fn into(self) -> $wrapped_ty<$generic> {
+                self.0
+            }
+        }
+
+        impl<$generic> Deref for $wrapper_ty<$generic> {
+            type Target = $wrapped_ty<$generic>;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl<$generic> DerefMut for $wrapper_ty<$generic> {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+
+        impl<$generic> PartialEq<$wrapped_ty<$generic>> for $wrapper_ty<$generic>
+        where
+            $generic: PartialEq,
+        {
+            fn eq(&self, other: &$wrapped_ty<$generic>) -> bool {
+                self.0.eq(other)
+            }
+        }
+    };
 }
 
-asn1_wrapper! { struct BitStringAsn1(BitString),               0x03 }
-asn1_wrapper! { struct ObjectIdentifierAsn1(ObjectIdentifier), 0x06 }
+macro_rules! define_application_tag {
+    ( $name:ident => $tag:literal ) => {
+        asn1_wrapper! { application tag struct $name<T>, $tag }
+    };
+    ( $( $name:ident => $tag:literal , )+ ) => {
+        $( define_application_tag! { $name => $tag } )+
+    };
+}
+
+asn1_wrapper! { auto struct BitStringAsn1(BitString),               0x03 }
+asn1_wrapper! { auto struct ObjectIdentifierAsn1(ObjectIdentifier), 0x06 }
+
+define_application_tag! {
+    ApplicationTag0  => 0xA0,
+    ApplicationTag1  => 0xA1,
+    ApplicationTag2  => 0xA2,
+    ApplicationTag3  => 0xA3,
+    ApplicationTag4  => 0xA4,
+    ApplicationTag5  => 0xA5,
+    ApplicationTag6  => 0xA6,
+    ApplicationTag7  => 0xA7,
+    ApplicationTag8  => 0xA8,
+    ApplicationTag9  => 0xA9,
+    ApplicationTag10 => 0xAA,
+    ApplicationTag11 => 0xAB,
+    ApplicationTag12 => 0xAC,
+    ApplicationTag13 => 0xAD,
+    ApplicationTag14 => 0xAE,
+    ApplicationTag15 => 0xAF,
+}
+
+asn1_wrapper! { auto collection struct Asn1SequenceOf<T>, 0x30 }
+asn1_wrapper! { auto collection struct Asn1SetOf<T>,      0x31 }
+
+fn serialize_vec<S, T>(
+    set: &Vec<T>,
+    serializer: S,
+) -> Result<<S as ser::Serializer>::Ok, <S as ser::Serializer>::Error>
+where
+    S: ser::Serializer,
+    T: Serialize,
+{
+    use serde::ser::SerializeSeq;
+
+    let mut seq = serializer.serialize_seq(Some(set.len()))?;
+    for e in set {
+        seq.serialize_element(e)?;
+    }
+    seq.end()
+}
+
+fn deserialize_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: de::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    struct Visitor<T>(std::marker::PhantomData<T>);
+
+    impl<'de, T> de::Visitor<'de> for Visitor<T>
+    where
+        T: Deserialize<'de>,
+    {
+        type Value = Vec<T>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("FIXME")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: de::SeqAccess<'de>,
+        {
+            let mut vec = Vec::new();
+            while let Some(e) = seq.next_element()? {
+                vec.push(e);
+            }
+            Ok(vec)
+        }
+    }
+
+    deserializer.deserialize_seq(Visitor(std::marker::PhantomData))
+}
 
 /// A BigInt wrapper for Asn1 encoding.
 ///
@@ -67,41 +260,16 @@ pub struct IntegerAsn1(
     pub BigInt,
 );
 
-impl IntegerAsn1 {
-    pub const TAG: u8 = 0x02;
-    pub(crate) const NAME: &'static str = "IntegerAsn1";
-}
+impls! { IntegerAsn1(BigInt), 0x02 }
 
-impl From<BigInt> for IntegerAsn1 {
-    fn from(wrapped: BigInt) -> IntegerAsn1 {
-        Self(wrapped)
-    }
-}
-
-impl Into<BigInt> for IntegerAsn1 {
-    fn into(self) -> BigInt {
-        self.0
-    }
-}
-
-impl Deref for IntegerAsn1 {
-    type Target = BigInt;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for IntegerAsn1 {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl PartialEq<BigInt> for IntegerAsn1 {
-    fn eq(&self, other: &BigInt) -> bool {
-        self.0.eq(other)
-    }
+fn serialize_big_int<S>(
+    big_int: &BigInt,
+    serializer: S,
+) -> Result<<S as ser::Serializer>::Ok, <S as ser::Serializer>::Error>
+where
+    S: ser::Serializer,
+{
+    serializer.serialize_bytes(&big_int.to_signed_bytes_be())
 }
 
 fn deserialize_big_int<'de, D>(deserializer: D) -> Result<BigInt, D::Error>
@@ -122,15 +290,15 @@ where
             E: de::Error,
         {
             if v.len() > 1 {
-               if v[0] == 0x00 {
-                   Ok(BigInt::from_bytes_be(Sign::Plus, &v[1..]))
-               } else {
-                   if v[0] & 0x80 != 0 {
-                       Ok(BigInt::from_bytes_be(Sign::Minus, v))
-                   } else {
-                       Ok(BigInt::from_bytes_be(Sign::Plus, v))
-                   }
-               }
+                if v[0] == 0x00 {
+                    Ok(BigInt::from_bytes_be(Sign::Plus, &v[1..]))
+                } else {
+                    if v[0] & 0x80 != 0 {
+                        Ok(BigInt::from_bytes_be(Sign::Minus, v))
+                    } else {
+                        Ok(BigInt::from_bytes_be(Sign::Plus, v))
+                    }
+                }
             } else {
                 Ok(BigInt::from(v[0] as i8))
             }
@@ -140,14 +308,99 @@ where
     deserializer.deserialize_bytes(Visitor)
 }
 
-fn serialize_big_int<S>(
-    big_int: &BigInt,
+/// A timestamp date wrapper for Asn1 encoding.
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct DateAsn1(
+    #[serde(
+        serialize_with = "serialize_date_timestamp",
+        deserialize_with = "deserialize_date_timestamp"
+    )]
+    pub i64,
+);
+
+impls! { DateAsn1(i64), 0x17 }
+
+fn serialize_date_timestamp<S>(
+    timestamp: &i64,
     serializer: S,
 ) -> Result<<S as ser::Serializer>::Ok, <S as ser::Serializer>::Error>
 where
     S: ser::Serializer,
 {
-    serializer.serialize_bytes(&big_int.to_signed_bytes_be())
+    use chrono::naive::NaiveDateTime;
+
+    let date = NaiveDateTime::from_timestamp(*timestamp, 0);
+    let year = if date.year() >= 2000 {
+        date.year() - 2000
+    } else {
+        date.year() - 1900
+    };
+
+    let mut encoded = [
+        0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x5A,
+    ];
+    encoded[0] |= (year / 10) as u8;
+    encoded[1] |= (year % 10) as u8;
+    encoded[2] |= (date.month() / 10) as u8;
+    encoded[3] |= (date.month() % 10) as u8;
+    encoded[4] |= (date.day() / 10) as u8;
+    encoded[5] |= (date.day() % 10) as u8;
+    encoded[6] |= (date.hour() / 10) as u8;
+    encoded[7] |= (date.hour() % 10) as u8;
+    encoded[8] |= (date.minute() / 10) as u8;
+    encoded[9] |= (date.minute() % 10) as u8;
+    encoded[10] |= (date.second() / 10) as u8;
+    encoded[11] |= (date.second() % 10) as u8;
+
+    serializer.serialize_bytes(&encoded)
+}
+
+fn deserialize_date_timestamp<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    struct Visitor;
+
+    impl<'de> de::Visitor<'de> for Visitor {
+        type Value = i64;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a valid buffer representing an Asn1 UTCDate")
+        }
+
+        fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            use chrono::naive::NaiveDate;
+
+            if v.len() != 13 {
+                return Err(E::invalid_value(
+                    de::Unexpected::Other("unsupported date format"),
+                    &"a valid buffer representing an Asn1 UTCDate (exactly 13 bytes required)",
+                ));
+            }
+
+            let yyyy = {
+                let yy = i32::from(v[0] & 0x0F) * 10 + i32::from(v[1] & 0x0F);
+                if yy >= 50 {
+                    1900 + yy
+                } else {
+                    2000 + yy
+                }
+            };
+            let month = u32::from(v[2] & 0x0F) * 10 + u32::from(v[3] & 0x0F);
+            let day = u32::from(v[4] & 0x0F) * 10 + u32::from(v[5] & 0x0F);
+            let hour = u32::from(v[6] & 0x0F) * 10 + u32::from(v[7] & 0x0F);
+            let minute = u32::from(v[8] & 0x0F) * 10 + u32::from(v[9] & 0x0F);
+            let second = u32::from(v[10] & 0x0F) * 10 + u32::from(v[11] & 0x0F);
+            let dt = NaiveDate::from_ymd(yyyy, month, day).and_hms(hour, minute, second);
+
+            Ok(dt.timestamp())
+        }
+    }
+
+    deserializer.deserialize_bytes(Visitor)
 }
 
 /// A BitString encapsulating things.
@@ -234,8 +487,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::convert::TryFrom;
     use num_bigint::ToBigInt;
+    use pretty_assertions::assert_eq;
+    use std::borrow::Cow;
+    use std::convert::TryFrom;
 
     #[test]
     fn oid() {
@@ -338,28 +593,140 @@ mod tests {
     #[test]
     fn small_integer() {
         let buffer = [0x02, 0x01, 0x03];
-        let big_integer =
-            IntegerAsn1::from(3.to_bigint().unwrap());
+        let big_integer = IntegerAsn1::from(3.to_bigint().unwrap());
 
         let parsed_big_integer: IntegerAsn1 =
             crate::from_bytes(&buffer).expect("deserialization failed");
         assert_eq!(parsed_big_integer, big_integer);
 
         let encoded_big_integer = crate::to_vec(&big_integer).expect("serialization failed");
-        assert_eq!(encoded_big_integer, buffer.to_vec());
+        assert_eq!(encoded_big_integer, buffer);
     }
 
     #[test]
     fn small_integer_negative() {
         let buffer = [0x02, 0x01, 0xF9];
-        let big_integer =
-            IntegerAsn1::from(-7.to_bigint().unwrap());
+        let big_integer = IntegerAsn1::from(-7.to_bigint().unwrap());
 
         let parsed_big_integer: IntegerAsn1 =
             crate::from_bytes(&buffer).expect("deserialization failed");
         assert_eq!(parsed_big_integer, big_integer);
 
         let encoded_big_integer = crate::to_vec(&big_integer).expect("serialization failed");
-        assert_eq!(encoded_big_integer, buffer.to_vec());
+        assert_eq!(encoded_big_integer, buffer);
+    }
+
+    #[test]
+    fn date() {
+        use chrono::naive::NaiveDate;
+
+        let buffer = [
+            0x17, 0x0D, 0x31, 0x39, 0x31, 0x30, 0x31, 0x37, 0x31, 0x37, 0x34, 0x31, 0x32, 0x38,
+            0x5A,
+        ];
+        let timestamp = DateAsn1(
+            NaiveDate::from_ymd(2019, 10, 17)
+                .and_hms(17, 41, 28)
+                .timestamp(),
+        );
+
+        let parsed: DateAsn1 = crate::from_bytes(&buffer).expect("deserialization failed");
+        assert_eq!(parsed, timestamp);
+
+        let encoded = crate::to_vec(&timestamp).expect("serialization failed");
+        assert_eq!(encoded, buffer.to_vec());
+    }
+
+    #[test]
+    fn set_of() {
+        #[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, PartialEq, Eq)]
+        struct Elem<'a> {
+            #[serde(borrow)]
+            first_name: Cow<'a, str>,
+            #[serde(borrow)]
+            last_name: Cow<'a, str>,
+        }
+
+        let set_of_elems = Asn1SetOf(vec![
+            Elem {
+                first_name: "名前".into(),
+                last_name: "苗字".into(),
+            },
+            Elem {
+                first_name: "和夫".into(),
+                last_name: "田中".into(),
+            },
+        ]);
+
+        #[rustfmt::skip]
+        let buffer = [
+            0x31, 0x24,
+                0x30, 0x10,
+                    0x0C, 0x06, 0xE5, 0x90, 0x8D, 0xE5, 0x89, 0x8D,
+                    0x0C, 0x06, 0xE8, 0x8B, 0x97, 0xE5, 0xAD, 0x97,
+                0x30, 0x10,
+                    0x0C, 0x06, 0xE5, 0x92, 0x8C, 0xE5, 0xA4, 0xAB,
+                    0x0C, 0x06, 0xE7, 0x94, 0xB0, 0xE4, 0xB8, 0xAD,
+        ];
+
+        let parsed: Asn1SetOf<Elem> = crate::from_bytes(&buffer).expect("deserialization failed");
+        assert_eq!(parsed, set_of_elems);
+
+        let encoded = crate::to_vec(&set_of_elems).expect("serialization failed");
+        assert_eq!(encoded, buffer.to_vec());
+    }
+
+    #[test]
+    fn sequence_of() {
+        #[derive(Debug, Serialize, Deserialize, Ord, PartialOrd, PartialEq, Eq)]
+        struct Elem<'a> {
+            #[serde(borrow)]
+            first_name: Cow<'a, str>,
+            #[serde(borrow)]
+            last_name: Cow<'a, str>,
+        }
+
+        let set_of_elems = Asn1SequenceOf(vec![
+            Elem {
+                first_name: "名前".into(),
+                last_name: "苗字".into(),
+            },
+            Elem {
+                first_name: "和夫".into(),
+                last_name: "田中".into(),
+            },
+        ]);
+
+        #[rustfmt::skip]
+        let buffer = [
+            0x30, 0x24,
+                0x30, 0x10,
+                    0x0C, 0x06, 0xE5, 0x90, 0x8D, 0xE5, 0x89, 0x8D,
+                    0x0C, 0x06, 0xE8, 0x8B, 0x97, 0xE5, 0xAD, 0x97,
+                0x30, 0x10,
+                    0x0C, 0x06, 0xE5, 0x92, 0x8C, 0xE5, 0xA4, 0xAB,
+                    0x0C, 0x06, 0xE7, 0x94, 0xB0, 0xE4, 0xB8, 0xAD,
+        ];
+
+        let parsed: Asn1SequenceOf<Elem> =
+            crate::from_bytes(&buffer).expect("deserialization failed");
+        assert_eq!(parsed, set_of_elems);
+
+        let encoded = crate::to_vec(&set_of_elems).expect("serialization failed");
+        assert_eq!(encoded, buffer.to_vec());
+    }
+
+    #[test]
+    fn application_tag0() {
+        let buffer = [0xA0, 0x03, 0x02, 0x01, 0xF9];
+        let application_tag = ApplicationTag0(IntegerAsn1::from(-7.to_bigint().unwrap()));
+
+        let parsed_application_tag: ApplicationTag0<IntegerAsn1> =
+            crate::from_bytes(&buffer).expect("deserialization failed");
+        assert_eq!(parsed_application_tag, application_tag);
+
+        let encoded_application_tag =
+            crate::to_vec(&application_tag).expect("serialization failed");
+        assert_eq!(encoded_application_tag, buffer);
     }
 }
