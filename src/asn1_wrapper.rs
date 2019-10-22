@@ -3,8 +3,10 @@ use chrono::{Datelike, Timelike};
 use num_bigint::{BigInt, Sign};
 use oid::ObjectIdentifier;
 use serde::{de, ser, Deserialize, Serialize};
-use std::fmt;
-use std::ops::{Deref, DerefMut};
+use std::{
+    fmt,
+    ops::{Deref, DerefMut},
+};
 
 /// Generate a thin ASN1 wrapper type with associated tag
 /// and name for serialization and deserialization purpose.
@@ -88,7 +90,7 @@ macro_rules! impls {
     ($wrapper_ty:ident < $generic:ident >, $tag:literal) => {
         impl<$generic> $wrapper_ty<$generic> {
             pub const TAG: u8 = $tag;
-            pub(crate) const NAME: &'static str = stringify!($wrapper_ty);
+            pub const NAME: &'static str = stringify!($wrapper_ty);
         }
 
         impl<$generic> From<$generic> for $wrapper_ty<$generic> {
@@ -177,6 +179,9 @@ macro_rules! define_application_tag {
 asn1_wrapper! { auto struct BitStringAsn1(BitString),               0x03 }
 asn1_wrapper! { auto struct ObjectIdentifierAsn1(ObjectIdentifier), 0x06 }
 
+asn1_wrapper! { auto collection struct Asn1SequenceOf<T>, 0x30 }
+asn1_wrapper! { auto collection struct Asn1SetOf<T>,      0x31 }
+
 define_application_tag! {
     ApplicationTag0  => 0xA0,
     ApplicationTag1  => 0xA1,
@@ -196,11 +201,8 @@ define_application_tag! {
     ApplicationTag15 => 0xAF,
 }
 
-asn1_wrapper! { auto collection struct Asn1SequenceOf<T>, 0x30 }
-asn1_wrapper! { auto collection struct Asn1SetOf<T>,      0x31 }
-
 fn serialize_vec<S, T>(
-    set: &Vec<T>,
+    set: &[T],
     serializer: S,
 ) -> Result<<S as ser::Serializer>::Ok, <S as ser::Serializer>::Error>
 where
@@ -230,7 +232,7 @@ where
         type Value = Vec<T>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("FIXME")
+            formatter.write_str("a valid sequence of T")
         }
 
         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -292,12 +294,10 @@ where
             if v.len() > 1 {
                 if v[0] == 0x00 {
                     Ok(BigInt::from_bytes_be(Sign::Plus, &v[1..]))
+                } else if v[0] & 0x80 != 0 {
+                    Ok(BigInt::from_bytes_be(Sign::Minus, v))
                 } else {
-                    if v[0] & 0x80 != 0 {
-                        Ok(BigInt::from_bytes_be(Sign::Minus, v))
-                    } else {
-                        Ok(BigInt::from_bytes_be(Sign::Plus, v))
-                    }
+                    Ok(BigInt::from_bytes_be(Sign::Plus, v))
                 }
             } else {
                 Ok(BigInt::from(v[0] as i8))
@@ -489,8 +489,7 @@ mod tests {
     use super::*;
     use num_bigint::ToBigInt;
     use pretty_assertions::assert_eq;
-    use std::borrow::Cow;
-    use std::convert::TryFrom;
+    use std::{borrow::Cow, convert::TryFrom};
 
     #[test]
     fn oid() {

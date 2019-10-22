@@ -5,7 +5,7 @@ mod octet_string;
 mod sequence;
 mod utf8_string;
 
-#[cfg(feature = "more_types")]
+#[cfg(feature = "extra_types")]
 use crate::asn1_wrapper::*;
 use crate::{
 	Result, SerdeAsn1DerError,
@@ -37,9 +37,9 @@ pub fn from_reader<'a, T: Deserialize<'a>>(reader: impl Read + 'a) -> Result<T> 
 pub struct Deserializer<'de> {
 	reader: PeekableReader<Box<dyn Read + 'de>>,
 	buf: Vec<u8>,
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	encapsulated: bool,
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	encapsulator_tag: u8,
 }
 
@@ -49,7 +49,7 @@ impl<'de> Deserializer<'de> {
 		Self::new_from_reader(Cursor::new(bytes))
 	}
 	/// Creates a new deserializer for `reader`
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	pub fn new_from_reader(reader: impl Read + 'de) -> Self {
 		Self {
 			reader: PeekableReader::new(Box::new(reader)),
@@ -59,7 +59,7 @@ impl<'de> Deserializer<'de> {
 		}
 	}
 
-	#[cfg(not(feature = "more_types"))]
+	#[cfg(not(feature = "extra_types"))]
 	pub fn new_from_reader(reader: impl Read + 'de) -> Self {
 		Self {
 			reader: PeekableReader::new(Box::new(reader)),
@@ -68,16 +68,17 @@ impl<'de> Deserializer<'de> {
 	}
 	
 	/// Reads tag and length of the next DER object
-	fn next_tag_len(&mut self) -> Result<(u8, usize)> {
+	fn __next_tag_len(&mut self) -> Result<(u8, usize)> {
 		// Read type and length
 		let tag = self.reader.read_one()?;
 		let len = Length::deserialized(&mut self.reader)?;
 		Ok((tag, len))
 	}
+
 	/// Reads the next DER object into `self.buf` and returns the tag
-	fn next_object(&mut self) -> Result<u8> {
-		#[cfg(feature = "more_types")]
-		self.decapsulate()?;
+	fn __next_object(&mut self) -> Result<u8> {
+		#[cfg(feature = "extra_types")]
+		self.__decapsulate()?;
 
 		// Read type
 		let tag = self.reader.read_one()?;
@@ -90,22 +91,76 @@ impl<'de> Deserializer<'de> {
 		Ok(tag)
 	}
 
-	#[cfg(feature = "more_types")]
-	fn encapsulate(&mut self, tag: u8) {
+	/// Peek next DER object tag (ignoring encapsulator)
+	#[cfg(feature = "extra_types")]
+	fn __peek_object(&mut self) -> Result<u8> {
+		if self.encapsulated {
+			let peeked = self.reader.peek_buffer()?;
+
+			if peeked.len() < 1 {
+				debug_log!("peek_object: TRUNCATED DATA (couldn't read encapsulator tag or length)");
+				return Err(SerdeAsn1DerError::TruncatedData);
+			}
+
+			// check tag
+			if peeked.buffer()[0] != self.encapsulator_tag {
+				debug_log!("peek_object: INVALID (encapsulator tag doesn't match)");
+				self.encapsulated = false;
+				return Err(SerdeAsn1DerError::InvalidData);
+			}
+
+			let length = {
+				let len = Length::deserialized(&mut Cursor::new(&peeked.buffer()[1..]))?;
+				Length::encoded_len(len)
+			};
+
+			let object_tag_index = if self.encapsulator_tag == BitStringAsn1Container::<()>::TAG {
+				length + 2
+			} else {
+				length + 1
+			};
+
+			if peeked.len() < object_tag_index {
+				debug_log!("peek_object: TRUNCATED DATA (couldn't read object tag)");
+				return Err(SerdeAsn1DerError::TruncatedData);
+			}
+
+			Ok(peeked.buffer()[object_tag_index])
+		} else {
+			Ok(self.reader.peek_one()?)
+		}
+	}
+
+	#[cfg(not(feature = "extra_types"))]
+	fn __peek_object(&mut self) -> Result<u8> {
+		Ok(self.reader.peek_one()?)
+	}
+
+	#[cfg(feature = "extra_types")]
+	fn __encapsulate(&mut self, tag: u8) {
+		debug_log!("> encapsulator ({})", tag);
 		self.encapsulated = true;
 		self.encapsulator_tag = tag;
 	}
 
-	#[cfg(feature = "more_types")]
-	fn decapsulate(&mut self) -> Result<()> {
+	#[cfg(feature = "extra_types")]
+	fn __decapsulate(&mut self) -> Result<()> {
 		if self.encapsulated {
-			// discard header bytes
-			self.reader.read_one()?; // tag
+			self.encapsulated = false;
+
+			// tag
+			if self.reader.peek_one()? == self.encapsulator_tag {
+				self.reader.read_one()?; // discard it
+			} else {
+				debug_log!("decapsulate: INVALID (encapsulator tag doesn't match)");
+				return Err(SerdeAsn1DerError::InvalidData);
+			}
+
 			Length::deserialized(&mut self.reader)?; // len
+
 			if self.encapsulator_tag == BitStringAsn1Container::<()>::TAG {
 				self.reader.read_one()?; // unused bits count
 			}
-			self.encapsulated = false;
 		}
 		Ok(())
 	}
@@ -114,20 +169,51 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	type Error = SerdeAsn1DerError;
 	
 	//noinspection RsUnresolvedReference
+	#[cfg(not(feature = "extra_types"))]
 	fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_any");
-
-		match self.reader.peek_one()? {
+		match self.__peek_object()? {
 			Boolean::TAG => self.deserialize_bool(visitor),
 			UnsignedInteger::TAG => self.deserialize_u128(visitor),
 			Null::TAG => self.deserialize_unit(visitor),
 			OctetString::TAG => self.deserialize_byte_buf(visitor),
 			Sequence::TAG => self.deserialize_seq(visitor),
 			Utf8String::TAG => self.deserialize_string(visitor),
-			#[cfg(feature = "more_types")]
+			_ => {
+				debug_log!("deserialize_any: INVALID");
+				Err(SerdeAsn1DerError::InvalidData)
+			},
+		}
+	}
+	#[cfg(feature = "extra_types")]
+	fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+		debug_log!("deserialize_any");
+		match self.__peek_object()? {
+			Boolean::TAG => self.deserialize_bool(visitor),
+			UnsignedInteger::TAG => self.deserialize_u128(visitor), // FIXME: doesn't work for big integer as it
+			Null::TAG => self.deserialize_unit(visitor),
+			OctetString::TAG => self.deserialize_byte_buf(visitor),
+			Sequence::TAG => self.deserialize_seq(visitor),
+			Utf8String::TAG => self.deserialize_string(visitor),
 			ObjectIdentifierAsn1::TAG => self.deserialize_bytes(visitor),
-			#[cfg(feature = "more_types")]
 			BitStringAsn1::TAG => self.deserialize_byte_buf(visitor),
+			DateAsn1::TAG => self.deserialize_bytes(visitor),
+			ApplicationTag0::<()>::TAG  => self.deserialize_newtype_struct(ApplicationTag0::<()>::NAME, visitor),
+			ApplicationTag1::<()>::TAG  => self.deserialize_newtype_struct(ApplicationTag1::<()>::NAME, visitor),
+			ApplicationTag2::<()>::TAG  => self.deserialize_newtype_struct(ApplicationTag2::<()>::NAME, visitor),
+			ApplicationTag3::<()>::TAG  => self.deserialize_newtype_struct(ApplicationTag3::<()>::NAME, visitor),
+			ApplicationTag4::<()>::TAG  => self.deserialize_newtype_struct(ApplicationTag4::<()>::NAME, visitor),
+			ApplicationTag5::<()>::TAG  => self.deserialize_newtype_struct(ApplicationTag5::<()>::NAME, visitor),
+			ApplicationTag6::<()>::TAG  => self.deserialize_newtype_struct(ApplicationTag6::<()>::NAME, visitor),
+			ApplicationTag7::<()>::TAG  => self.deserialize_newtype_struct(ApplicationTag7::<()>::NAME, visitor),
+			ApplicationTag8::<()>::TAG  => self.deserialize_newtype_struct(ApplicationTag8::<()>::NAME, visitor),
+			ApplicationTag9::<()>::TAG  => self.deserialize_newtype_struct(ApplicationTag9::<()>::NAME, visitor),
+			ApplicationTag10::<()>::TAG => self.deserialize_newtype_struct(ApplicationTag10::<()>::NAME, visitor),
+			ApplicationTag11::<()>::TAG => self.deserialize_newtype_struct(ApplicationTag11::<()>::NAME, visitor),
+			ApplicationTag12::<()>::TAG => self.deserialize_newtype_struct(ApplicationTag12::<()>::NAME, visitor),
+			ApplicationTag13::<()>::TAG => self.deserialize_newtype_struct(ApplicationTag13::<()>::NAME, visitor),
+			ApplicationTag14::<()>::TAG => self.deserialize_newtype_struct(ApplicationTag14::<()>::NAME, visitor),
+			ApplicationTag15::<()>::TAG => self.deserialize_newtype_struct(ApplicationTag15::<()>::NAME, visitor),
 			_ => {
 				debug_log!("deserialize_any: INVALID");
 				Err(SerdeAsn1DerError::InvalidData)
@@ -137,11 +223,11 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	
 	fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_bool");
-		if self.reader.peek_one()? != Boolean::TAG {
+		if self.__peek_object()? != Boolean::TAG {
 			debug_log!("deserialize_bool: INVALID");
 			return Err(SerdeAsn1DerError::InvalidData);
 		}
-		self.next_object()?;
+		self.__next_object()?;
 		visitor.visit_bool(Boolean::deserialize(&self.buf)?)
 	}
 	
@@ -169,43 +255,48 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	
 	fn deserialize_u8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_u8");
-		if self.next_object()? != UnsignedInteger::TAG {
+		if self.__peek_object()? != UnsignedInteger::TAG {
 			debug_log!("deserialize_u8: INVALID");
 			return Err(SerdeAsn1DerError::InvalidData);
 		}
+		self.__next_object()?;
 		visitor.visit_u8(UnsignedInteger::deserialize(&self.buf)?)
 	}
 	fn deserialize_u16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_u16");
-		if self.next_object()? != UnsignedInteger::TAG {
+		if self.__peek_object()? != UnsignedInteger::TAG {
 			debug_log!("deserialize_u16: INVALID");
 			return Err(SerdeAsn1DerError::InvalidData);
 		}
+		self.__next_object()?;
 		visitor.visit_u16(UnsignedInteger::deserialize(&self.buf)?)
 	}
 	fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_u32");
-		if self.next_object()? != UnsignedInteger::TAG {
+		if self.__peek_object()? != UnsignedInteger::TAG {
 			debug_log!("deserialize_u32: INVALID");
 			return Err(SerdeAsn1DerError::InvalidData);
 		}
+		self.__next_object()?;
 		visitor.visit_u32(UnsignedInteger::deserialize(&self.buf)?)
 	}
 	fn deserialize_u64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_u64");
-		if self.next_object()? != UnsignedInteger::TAG {
+		if self.__peek_object()? != UnsignedInteger::TAG {
 			debug_log!("deserialize_u64: INVALID");
 			return Err(SerdeAsn1DerError::InvalidData);
 		}
+		self.__next_object()?;
 		visitor.visit_u64(UnsignedInteger::deserialize(&self.buf)?)
 	}
 	//noinspection RsTraitImplementation
 	fn deserialize_u128<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_u128");
-		if self.next_object()? != UnsignedInteger::TAG {
+		if self.__peek_object()? != UnsignedInteger::TAG {
 			debug_log!("deserialize_u128: INVALID");
 			return Err(SerdeAsn1DerError::InvalidData);
 		}
+		self.__next_object()?;
 		visitor.visit_u128(UnsignedInteger::deserialize(&self.buf)?)
 	}
 	
@@ -220,7 +311,10 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	
 	fn deserialize_char<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_char");
-		if self.next_object()? != Utf8String::TAG { Err(SerdeAsn1DerError::InvalidData)? }
+		if self.__peek_object()? != Utf8String::TAG {
+			return Err(SerdeAsn1DerError::InvalidData)
+		}
+		self.__next_object()?;
 		let s = Utf8String::deserialize(&self.buf)?;
 		
 		let c = s.chars().next().ok_or(SerdeAsn1DerError::UnsupportedValue)?;
@@ -228,50 +322,81 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	}
 	fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_str");
-		if self.next_object()? != Utf8String::TAG {
+		if self.__peek_object()? != Utf8String::TAG {
 			debug_log!("deserialize_str: INVALID");
 			return Err(SerdeAsn1DerError::InvalidData);
 		}
+		self.__next_object()?;
 		visitor.visit_str(Utf8String::deserialize(&self.buf)?)
 	}
 	fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_string");
-		if self.next_object()? != Utf8String::TAG {
+		if self.__peek_object()? != Utf8String::TAG {
 			debug_log!("deserialize_string: INVALID");
 			return Err(SerdeAsn1DerError::InvalidData);
 		}
+		self.__next_object()?;
 		visitor.visit_string(Utf8String::deserialize(&self.buf)?.to_string())
 	}
-	
+
+	#[cfg(feature = "extra_types")]
 	fn deserialize_bytes<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_bytes");
-		match self.next_object()? {
-			OctetString::TAG => visitor.visit_bytes(OctetString::deserialize(&self.buf)?),
-			#[cfg(feature = "more_types")]
-			ObjectIdentifierAsn1::TAG => visitor.visit_bytes(&self.buf),
-			#[cfg(feature = "more_types")]
-			BitStringAsn1::TAG => visitor.visit_bytes(&self.buf),
-			#[cfg(feature = "more_types")]
-			IntegerAsn1::TAG => visitor.visit_bytes(&self.buf),
-			#[cfg(feature = "more_types")]
-			DateAsn1::TAG => visitor.visit_bytes(&self.buf),
+		match self.__peek_object()? {
+			OctetString::TAG => {
+				self.__next_object()?;
+				return visitor.visit_bytes(OctetString::deserialize(&self.buf)?);
+			},
+			ObjectIdentifierAsn1::TAG => {},
+			BitStringAsn1::TAG => {},
+			IntegerAsn1::TAG => {},
+			DateAsn1::TAG => {},
 			_ => {
 				debug_log!("deserialize_bytes: INVALID");
-				Err(SerdeAsn1DerError::InvalidData)
+				return Err(SerdeAsn1DerError::InvalidData);
 			},
 		}
+
+		self.__next_object()?;
+		visitor.visit_bytes(&self.buf)
 	}
+	#[cfg(not(feature = "extra_types"))]
+	fn deserialize_bytes<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+		debug_log!("deserialize_bytes");
+		if self.__peek_object()? != OctetString::TAG {
+			debug_log!("deserialize_bytes: INVALID");
+			return Err(SerdeAsn1DerError::InvalidData);
+		}
+		self.__next_object()?;
+		visitor.visit_bytes(OctetString::deserialize(&self.buf)?)
+	}
+	#[cfg(feature = "extra_types")]
 	fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_byte_buf");
-		match self.next_object()? {
-			OctetString::TAG => visitor.visit_byte_buf(OctetString::deserialize(&self.buf)?.to_vec()),
-			#[cfg(feature = "more_types")]
-			BitStringAsn1::TAG => visitor.visit_byte_buf(self.buf.to_vec()),
+		match self.__peek_object()? {
+			OctetString::TAG => {
+				self.__next_object()?;
+				return visitor.visit_byte_buf(OctetString::deserialize(&self.buf)?.to_vec());
+			},
+			BitStringAsn1::TAG => {},
 			_ => {
 				debug_log!("deserialize_byte_buf: INVALID");
-				Err(SerdeAsn1DerError::InvalidData)
+				return Err(SerdeAsn1DerError::InvalidData);
 			},
 		}
+
+		self.__next_object()?;
+		visitor.visit_byte_buf(self.buf.to_vec())
+	}
+	#[cfg(not(feature = "extra_types"))]
+	fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+		debug_log!("deserialize_byte_buf");
+		if self.__peek_object()? != OctetString::TAG {
+			debug_log!("deserialize_byte_buf: INVALID");
+			return Err(SerdeAsn1DerError::InvalidData);
+		}
+		self.__next_object()?;
+		visitor.visit_byte_buf(OctetString::deserialize(&self.buf)?.to_vec())
 	}
 	
 	fn deserialize_option<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
@@ -281,10 +406,11 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	
 	fn deserialize_unit<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_unit");
-		if self.next_object()? != Null::TAG {
+		if self.__peek_object()? != Null::TAG {
 			debug_log!("deserialize_unit: INVALID");
 			return Err(SerdeAsn1DerError::InvalidData);
 		}
+		self.__next_object()?;
 		Null::deserialize(&self.buf)?;
 		visitor.visit_unit()
 	}
@@ -300,85 +426,36 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	// As is done here, serializers are encouraged to treat newtype structs as
 	// insignificant wrappers around the data they contain. That means not
 	// parsing anything other than the contained value.
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	fn deserialize_newtype_struct<V: Visitor<'de>>(self, name: &'static str, visitor: V)
 		-> Result<V::Value>
 	{
 		debug_log!("deserialize_newtype_struct: {}", name);
 		match name {
-			BitStringAsn1Container::<()>::NAME => {
-				self.encapsulate(BitStringAsn1Container::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag0::<()>::NAME  => {
-				self.encapsulate(ApplicationTag0::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag1::<()>::NAME  => {
-				self.encapsulate(ApplicationTag1::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag2::<()>::NAME  => {
-				self.encapsulate(ApplicationTag2::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag3::<()>::NAME  => {
-				self.encapsulate(ApplicationTag3::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag4::<()>::NAME  => {
-				self.encapsulate(ApplicationTag4::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag5::<()>::NAME  => {
-				self.encapsulate(ApplicationTag5::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag6::<()>::NAME  => {
-				self.encapsulate(ApplicationTag6::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag7::<()>::NAME  => {
-				self.encapsulate(ApplicationTag7::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag8::<()>::NAME  => {
-				self.encapsulate(ApplicationTag8::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag9::<()>::NAME  => {
-				self.encapsulate(ApplicationTag9::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag10::<()>::NAME => {
-				self.encapsulate(ApplicationTag10::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag11::<()>::NAME => {
-				self.encapsulate(ApplicationTag11::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag12::<()>::NAME => {
-				self.encapsulate(ApplicationTag12::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag13::<()>::NAME => {
-				self.encapsulate(ApplicationTag13::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag14::<()>::NAME => {
-				self.encapsulate(ApplicationTag14::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			ApplicationTag15::<()>::NAME => {
-				self.encapsulate(ApplicationTag15::<()>::TAG);
-				visitor.visit_newtype_struct(self)
-			}
-			_ => visitor.visit_newtype_struct(self),
+			BitStringAsn1Container::<()>::NAME => self.__encapsulate(BitStringAsn1Container::<()>::TAG),
+			ApplicationTag0::<()>::NAME  => self.__encapsulate(ApplicationTag0::<()>::TAG),
+			ApplicationTag1::<()>::NAME  => self.__encapsulate(ApplicationTag1::<()>::TAG),
+			ApplicationTag2::<()>::NAME  => self.__encapsulate(ApplicationTag2::<()>::TAG),
+			ApplicationTag3::<()>::NAME  => self.__encapsulate(ApplicationTag3::<()>::TAG),
+			ApplicationTag4::<()>::NAME  => self.__encapsulate(ApplicationTag4::<()>::TAG),
+			ApplicationTag5::<()>::NAME  => self.__encapsulate(ApplicationTag5::<()>::TAG),
+			ApplicationTag6::<()>::NAME  => self.__encapsulate(ApplicationTag6::<()>::TAG),
+			ApplicationTag7::<()>::NAME  => self.__encapsulate(ApplicationTag7::<()>::TAG),
+			ApplicationTag8::<()>::NAME  => self.__encapsulate(ApplicationTag8::<()>::TAG),
+			ApplicationTag9::<()>::NAME  => self.__encapsulate(ApplicationTag9::<()>::TAG),
+			ApplicationTag10::<()>::NAME => self.__encapsulate(ApplicationTag10::<()>::TAG),
+			ApplicationTag11::<()>::NAME => self.__encapsulate(ApplicationTag11::<()>::TAG),
+			ApplicationTag12::<()>::NAME => self.__encapsulate(ApplicationTag12::<()>::TAG),
+			ApplicationTag13::<()>::NAME => self.__encapsulate(ApplicationTag13::<()>::TAG),
+			ApplicationTag14::<()>::NAME => self.__encapsulate(ApplicationTag14::<()>::TAG),
+			ApplicationTag15::<()>::NAME => self.__encapsulate(ApplicationTag15::<()>::TAG),
+			_ => {},
 		}
+
+		visitor.visit_newtype_struct(self)
 	}
 
-	#[cfg(not(feature = "more_types"))]
+	#[cfg(not(feature = "extra_types"))]
 	fn deserialize_newtype_struct<V: Visitor<'de>>(self, _name: &'static str, visitor: V)
 		-> Result<V::Value>
 	{
@@ -389,20 +466,23 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	fn deserialize_seq<V: Visitor<'de>>(mut self, visitor: V) -> Result<V::Value> {
 		debug_log!("deserialize_seq");
 
-		#[cfg(feature = "more_types")]
-		self.decapsulate()?;
+		#[cfg(feature = "extra_types")]
+		self.__decapsulate()?;
 
 		// Read tag and length
-		let (tag, len) = self.next_tag_len()?;
+		let (tag, len) = self.__next_tag_len()?;
+		debug_log!("len: {}", len);
 		match tag {
-			Sequence::TAG => visitor.visit_seq(Sequence::deserialize_lazy(&mut self, len)),
-			#[cfg(feature = "more_types")]
-			Asn1SetOf::<()>::TAG =>	visitor.visit_seq(Sequence::deserialize_lazy(&mut self, len)),
+			Sequence::TAG => {},
+			#[cfg(feature = "extra_types")]
+			Asn1SetOf::<()>::TAG =>	{},
 			_ => {
 				debug_log!("deserialize_seq: INVALID");
-				Err(SerdeAsn1DerError::InvalidData)
+				return Err(SerdeAsn1DerError::InvalidData);
 			},
 		}
+
+		visitor.visit_seq(Sequence::deserialize_lazy(&mut self, len))
 	}
 	//noinspection RsUnresolvedReference
 	fn deserialize_tuple<V: Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value> {
@@ -457,7 +537,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 		debug_log!("deserialize_ignored_any");
 
 		// Skip tag
-		self.reader.peek_one()?;
+		self.reader.read_one()?;
 		
 		// Read len and copy payload into `self.buf`
 		let len = Length::deserialized(&mut self.reader)?;

@@ -54,17 +54,22 @@
  ****************************************************************************/
 // https://lapo.it/asn1js/#MIIEGjCCAgKgAwIBAgIEN8NXxDANBgkqhkiG9w0BAQsFADAiMSAwHgYDVQQDDBdjb250b3NvLmxvY2FsIEF1dGhvcml0eTAeFw0xOTEwMTcxNzQxMjhaFw0yMjEwMTYxNzQxMjhaMB0xGzAZBgNVBAMMEnRlc3QuY29udG9zby5sb2NhbDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMptALdk7xKj9JmFSycxlaTV47oLv5Aabir17f1WseAcZ492Mx0wqcJMmT8rVAusyfqvrhodHu4GELGBySo4KChLEuoEOGTNw_wEMtM6j1E9K7kig1iiuH9nf9oow7OUdix4-w7TWQWpwl1NekKdTtvLLtEGSjmG187CUqR6fNHYag-iVMV5Umc5VQadvAgva8qxOsPpDkN_E2df5gST7H5g3igaZtxUa3x7VreN3qJP0-hYQiyM7KsgmdFAkKpHC6_k36H7SXtpzh0NbH5OJHifYsAP34WL-a6lAd0VM7UiIRMcLWA8HfmKL3p4bC-LFv5I0dvUUy1BTz1wHpRvVz8CAwEAAaNdMFswCQYDVR0TBAIwADAOBgNVHQ8BAf8EBAMCAaAwHQYDVR0OBBYEFCMimIgHf5c00sI9jZzeWoMLsR60MB8GA1UdIwQYMBaAFBbHC24DEnsUFLz_zmqB5cMCHo9OMA0GCSqGSIb3DQEBCwUAA4ICAQA1ehZTTBbes2DgGXwQugoV9PdOGMFEVT4dzrrluo_4exSfqLrNuY2NXVuNBKW4nDA5aD71Q_KUZ8Y8cV9qa8OBJQvQ0dd0qeHmeEYdDsj5YD4ECycKx9U1ZX5fi6tpSIX6DsietpCnrw4aTgbEOvMeQcuYCTP30Vpt-mYEKBlR_E2Vcl2zUD-67gqppSaC1RceL_8Cy6ZXlPqwmS2zqK9UhYVRKlEww8xSh_9CR9MmIDc4pHtCpMawcn6Dmo-A-LcKi5v_NIwvSJTei-h1gvRhvEOPcf4VZJMHXquNrxkMsKpuu7g_AYH7wl2MBaNaxyNlXY5e5OjxslrbRCfDab11YaJEONcBnapl_-Ajr70uVFN09tDXyk0EHYf75NiRztgVKclna26zP5qRb0JSYNQJW2kIIBX6DhU7kt6RcauF2hJ-jLWOF2vsAS8PdEr7vnR1EGOrrcQ3VUgMscNsDqf50YMi2Inu1Kt2t-QSvYs61ON39aVpqR67nskdUWzFCVgWQVezM1ZagoOyNp7WjRYl8hJ0YVZ7TRtP8nJOkZ6s046YHVWxMuGdqZfd_AUFb9xzzXjGRuuZ1JmSf-VBOFEe2MaPMyMQBeIs3Othz6Fcy6Am5F6c3It31WYJwiCa_NdbMIvGy1xvAN5kzR_Y6hkoQljoSr1rVuszJ9dtvuTccA
 
-use crate::pki_tests::ocsp_request::AlgorithmIdentifier;
-use crate::pki_tests::rsa_public_key::{RSAPublicKey, SubjectPublicKeyInfoRsa};
+use crate::pki_tests::{
+    ocsp_request::AlgorithmIdentifier,
+    rsa_public_key::{RSAPublicKey, SubjectPublicKeyInfoRsa},
+    version::{deserialize_optional_version, version_is_default, Version},
+};
+use chrono::naive::NaiveDate;
 use num_bigint_dig::{BigInt, Sign};
 use oid::prelude::*;
-use serde::de;
-use serde::{Deserialize, Serialize};
-use serde_asn1_der::asn1_wrapper::{
-    ApplicationTag0, ApplicationTag3, Asn1SequenceOf, Asn1SetOf, BitStringAsn1, DateAsn1,
-    ObjectIdentifierAsn1,
+use serde::{de, Deserialize, Serialize};
+use serde_asn1_der::{
+    asn1_wrapper::{
+        ApplicationTag0, ApplicationTag3, Asn1SequenceOf, Asn1SetOf, BitStringAsn1, DateAsn1,
+        ObjectIdentifierAsn1,
+    },
+    bit_string::BitString,
 };
-use serde_asn1_der::bit_string::BitString;
 use std::fmt;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -76,6 +81,10 @@ struct Certificate {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct TBSCertificate {
+    #[serde(
+        deserialize_with = "deserialize_optional_version",
+        skip_serializing_if = "version_is_default"
+    )]
     pub version: ApplicationTag0<Version>,
     pub serial_number: u128,
     pub signature: AlgorithmIdentifier,
@@ -84,44 +93,6 @@ struct TBSCertificate {
     pub subject: Name,
     pub subject_public_key_info: SubjectPublicKeyInfoRsa,
     pub extensions: ApplicationTag3<Extensions>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct Version(#[serde(deserialize_with = "deserialize_optional_version")] u8);
-
-const VERSION_DEFAULT: u8 = 1;
-pub fn deserialize_optional_version<'de, D>(d: D) -> Result<u8, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    struct Visitor;
-
-    impl<'de> de::Visitor<'de> for Visitor {
-        type Value = u8;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            write!(formatter, "nothing or a valid version number")
-        }
-
-        fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            if v > 2 {
-                Err(E::invalid_value(
-                    de::Unexpected::Other("invalid version number"),
-                    &"a valid buffer representing an OID",
-                ))
-            } else {
-                Ok(v)
-            }
-        }
-    }
-
-    match d.deserialize_u8(Visitor) {
-        Err(err) if err.to_string().as_str() == "InvalidData" => Ok(VERSION_DEFAULT),
-        result => result,
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -167,7 +138,7 @@ where
         type Value = bool;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            write!(formatter, "nothing or a valid ASN.1 boolean")
+            write!(formatter, "a valid ASN.1 boolean")
         }
 
         fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
@@ -181,15 +152,13 @@ where
     // attempts to deserialize a boolean, if it doesn't work
     // (because no boolean is present) use the default value.
     match d.deserialize_bool(Visitor) {
-        Err(err) if err.to_string().as_str() == "InvalidData" => Ok(CRITICAL_DEFAULT),
+        Err(_) => Ok(CRITICAL_DEFAULT),
         result => result,
     }
 }
 
 #[test]
 fn x509_v3_certificate() {
-    use chrono::naive::NaiveDate;
-
     let encoded = base64::decode(
         "MIIEGjCCAgKgAwIBAgIEN8NXxDANBgkqhkiG9w0BAQsFADAiMSAwHgYDVQQ\
          DDBdjb250b3NvLmxvY2FsIEF1dGhvcml0eTAeFw0xOTEwMTcxNzQxMjhaFw0yMjEwM\
@@ -295,7 +264,7 @@ fn x509_v3_certificate() {
     // TBSCertificate
 
     let tbs_certificate = TBSCertificate {
-        version: ApplicationTag0(Version(2)),
+        version: ApplicationTag0(Version::V3),
         serial_number: 935548868,
         signature: AlgorithmIdentifier {
             algorithm: ObjectIdentifier::try_from("1.2.840.113549.1.1.11")

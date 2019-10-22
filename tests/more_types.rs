@@ -1,2 +1,2 @@
-#![cfg(feature = "more_types")]
+#![cfg(feature = "extra_types")]
 mod pki_tests;

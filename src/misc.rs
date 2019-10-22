@@ -38,33 +38,85 @@ impl<T: Write> WriteExt for T {
 	}
 }
 
+#[cfg(feature = "extra_types")]
+const PEEKED_BUFFER_SIZE: usize = 10;
+#[cfg(not(feature = "extra_types"))]
+const PEEKED_BUFFER_SIZE: usize = 1;
+
+#[derive(Debug)]
+pub struct PeekedContent {
+	len: usize,
+	buffer: [u8; PEEKED_BUFFER_SIZE],
+}
+
+impl PeekedContent {
+	fn new() -> Self {
+		Self {
+			len: 0,
+			buffer: [0; PEEKED_BUFFER_SIZE],
+		}
+	}
+
+	pub fn take(&mut self) -> Self {
+		let mut val = Self::new();
+		std::mem::swap(&mut val, self);
+		val
+	}
+
+	#[cfg(feature = "extra_types")]
+	pub fn len(&self) -> usize {
+		self.len
+	}
+
+	#[cfg(feature = "extra_types")]
+	pub fn buffer(&self) -> [u8; PEEKED_BUFFER_SIZE] {
+		self.buffer
+	}
+}
 
 /// A peekable reader
 pub struct PeekableReader<R: Read> {
 	reader: R,
-	last: Option<u8>,
+	peeked: PeekedContent,
 	pos: usize
 }
 impl<R: Read> PeekableReader<R> {
 	/// Creates a new `PeekableReader` with `reader` as source
 	pub fn new(reader: R) -> Self {
-		Self{ reader, last: None, pos: 0 }
+		Self {
+			reader,
+			peeked: PeekedContent::new(),
+			pos: 0
+		}
 	}
 	
 	/// Peeks one byte without removing it from the `read`-queue
 	///
 	/// Multiple successive calls to `peek_one` will always return the same next byte
 	pub fn peek_one(&mut self) -> io::Result<u8> {
-		// Check if we already have peeked one byte
-		if let Some(last) = self.last { return Ok(last) }
-		
-		// Read byte
-		let mut buf = [0];
-		self.reader.read_exact(&mut buf)?;
-		self.last = Some(buf[0]);
-		
-		Ok(buf[0])
+		// Check if we already have peeked data
+		if self.peeked.len == 0 {
+			self.peeked.buffer[0] = self.reader.read_one()?;
+			self.peeked.len = 1;
+		}
+		Ok(self.peeked.buffer[0])
 	}
+
+	/// Peeks several bytes at once without removing them from the `read`-queue
+	/// Buffer size is defined by `PeekedBuffer`.
+	///
+	/// Successive calls to `peek_buffer` always return the same bytes.
+	#[cfg(feature = "extra_types")]
+	pub fn peek_buffer(&mut self) -> io::Result<&PeekedContent> {
+		// Check if we already have peeked data
+		if self.peeked.len < PEEKED_BUFFER_SIZE {
+			let n = self.reader.read(&mut self.peeked.buffer[self.peeked.len..])?;
+			self.peeked.len += n;
+		}
+
+		Ok(&self.peeked)
+	}
+
 	/// The current position (amount of bytes read)
 	pub fn pos(&self) -> usize {
 		self.pos
@@ -72,20 +124,32 @@ impl<R: Read> PeekableReader<R> {
 }
 impl<R: Read> Read for PeekableReader<R> {
 	fn read(&mut self, mut buf: &mut[u8]) -> io::Result<usize> {
-		// Check for zero-sized buffer
-		if buf.is_empty() { return Ok(0) }
 		let mut read = 0;
-		
-		// Move peeked byte if any
-		if let Some(last) = self.last.take() {
-			buf[0] = last;
-			buf = &mut buf[1..];
-			read += 1;
-		}
+
+		let peeked = self.peeked.take();
+		let new_start_index = if buf.len() <= peeked.len {
+			buf.copy_from_slice(&peeked.buffer[..buf.len()]);
+
+			// keep remaining peeked bytes
+			let remaining_bytes = peeked.len - buf.len();
+			if remaining_bytes > 0 {
+				self.peeked.buffer[..remaining_bytes].copy_from_slice(&peeked.buffer[buf.len()..peeked.len]);
+				self.peeked.len = remaining_bytes;
+			}
+
+			buf.len()
+		} else {
+			buf[..peeked.len].copy_from_slice(&peeked.buffer[..peeked.len]);
+			peeked.len
+		};
+		read += new_start_index;
+		buf = &mut buf[new_start_index..];
 		
 		// Read remaining bytes
 		read += self.reader.read(buf)?;
+
 		self.pos += read;
+
 		Ok(read)
 	}
 }
@@ -101,7 +165,9 @@ impl Length {
 			n @ 128..=255 => {
 				// Deserialize the amount of length bytes
 				let len = n as usize & 127;
-				if len > USIZE_LEN { Err(SerdeAsn1DerError::UnsupportedValue)? }
+				if len > USIZE_LEN {
+					return Err(SerdeAsn1DerError::UnsupportedValue)
+				}
 				
 				// Deserialize value
 				let mut num = [0; USIZE_LEN];

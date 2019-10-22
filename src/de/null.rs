@@ -9,9 +9,9 @@ impl Null {
 	
 	/// Deserializes `Null` from `data`
 	pub fn deserialize(data: &[u8]) -> Result<()> {
-		Ok(match data.is_empty() {
-			true => (),
-			false => Err(SerdeAsn1DerError::InvalidData)?
-		})
+		if !data.is_empty() {
+			return Err(SerdeAsn1DerError::InvalidData);
+		}
+		Ok(())
 	}
 }

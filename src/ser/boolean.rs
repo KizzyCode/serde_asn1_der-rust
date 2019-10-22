@@ -12,9 +12,10 @@ impl Boolean {
 		written += Length::serialize(1, &mut ser.writer)?;
 		
 		// Serialize the value
-		written += match value {
-			true => ser.writer.write_one(0xff)?,
-			false => ser.writer.write_one(0x00)?
+		written += if value {
+			ser.writer.write_one(0xff)?
+		} else {
+			ser.writer.write_one(0x00)?
 		};
 		Ok(written)
 	}

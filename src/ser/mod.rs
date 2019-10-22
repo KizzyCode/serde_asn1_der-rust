@@ -4,7 +4,7 @@ mod null;
 mod sequence;
 mod utf8_string;
 
-#[cfg(feature = "more_types")]
+#[cfg(feature = "extra_types")]
 use crate::asn1_wrapper::*;
 use crate::{
 	Result, SerdeAsn1DerError,
@@ -47,13 +47,13 @@ pub fn to_writer<T: ?Sized + Serialize>(value: &T, writer: impl Write) -> Result
 /// An ASN.1-DER serializer for `serde`
 pub struct Serializer<'se> {
 	writer: Box<dyn Write + 'se>,
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	tag_for_next_bytes: u8,
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	tag_for_next_seq: u8,
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	encapsulated: bool,
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	encapsulator_tag: u8,
 }
 impl<'se> Serializer<'se> {
@@ -66,7 +66,7 @@ impl<'se> Serializer<'se> {
 		Self::new_to_writer(Cursor::new(buf))
 	}
 	/// Creates a new serializer that writes to `writer`
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	pub fn new_to_writer(writer: impl Write + 'se) -> Self {
 		Self {
 			writer: Box::new(writer),
@@ -77,18 +77,18 @@ impl<'se> Serializer<'se> {
 		}
 	}
 
-	#[cfg(not(feature = "more_types"))]
+	#[cfg(not(feature = "extra_types"))]
 	pub fn new_to_writer(writer: impl Write + 'se) -> Self {
 		Self { writer: Box::new(writer) }
 	}
 
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	fn __encapsulate(&mut self, tag: u8) {
 		self.encapsulated = true;
 		self.encapsulator_tag = tag;
 	}
 
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	fn __write_encapsulator(&mut self, encapsulated_size: usize) -> Result<usize> {
 		let mut written = 0;
 		if self.encapsulated { // encapsulated
@@ -105,13 +105,13 @@ impl<'se> Serializer<'se> {
 		Ok(written)
 	}
 
-	#[cfg(not(feature = "more_types"))]
+	#[cfg(not(feature = "extra_types"))]
 	#[inline]
 	fn __write_encapsulator(&self, _: usize) -> Result<usize> {
 		Ok(0)
 	}
 
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	fn __serialize_bytes_with_tag(&mut self, bytes: &[u8]) -> Result<usize> {
 		let mut written = self.__write_encapsulator(bytes.len() + Length::encoded_len(bytes.len()) + 1)?;
 
@@ -125,7 +125,7 @@ impl<'se> Serializer<'se> {
 		Ok(written)
 	}
 
-	#[cfg(not(feature = "more_types"))]
+	#[cfg(not(feature = "extra_types"))]
 	fn __serialize_bytes_with_tag(&mut self, bytes: &[u8]) -> Result<usize> {
 		// Write tag, length and data
 		let mut written = self.writer.write_one(0x04)?;
@@ -252,7 +252,7 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 		Err(SerdeAsn1DerError::UnsupportedType)
 	}
 
-	#[cfg(not(feature = "more_types"))]
+	#[cfg(not(feature = "extra_types"))]
 	fn serialize_newtype_struct<T: ?Sized + Serialize>(self, _name: &'static str, value: &T)
 		-> Result<Self::Ok>
 	{
@@ -260,106 +260,40 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 		value.serialize(self)
 	}
 
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	fn serialize_newtype_struct<T: ?Sized + Serialize>(mut self, name: &'static str, value: &T)
 		-> Result<Self::Ok>
 	{
 		debug_log!("serialize_newtype_struct: {}", name);
+
 		match name {
-			ObjectIdentifierAsn1::NAME => {
-				self.tag_for_next_bytes = ObjectIdentifierAsn1::TAG;
-				value.serialize(self)
-			}
-			BitStringAsn1::NAME => {
-				self.tag_for_next_bytes = BitStringAsn1::TAG;
-				value.serialize(self)
-			}
-			IntegerAsn1::NAME => {
-				self.tag_for_next_bytes = IntegerAsn1::TAG;
-				value.serialize(self)
-			}
-			DateAsn1::NAME => {
-				self.tag_for_next_bytes = DateAsn1::TAG;
-				value.serialize(self)
-			}
-			Asn1SetOf::<()>::NAME => {
-				self.tag_for_next_seq = Asn1SetOf::<()>::TAG;
-				value.serialize(self)
-			}
-			Asn1SequenceOf::<()>::NAME => {
-				self.tag_for_next_seq = Asn1SequenceOf::<()>::TAG;
-				value.serialize(self)
-			}
-			BitStringAsn1Container::<()>::NAME => {
-				self.__encapsulate(BitStringAsn1Container::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag0::<()>::NAME  => {
-				self.__encapsulate(ApplicationTag0::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag1::<()>::NAME  => {
-				self.__encapsulate(ApplicationTag1::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag2::<()>::NAME  => {
-				self.__encapsulate(ApplicationTag2::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag3::<()>::NAME  => {
-				self.__encapsulate(ApplicationTag3::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag4::<()>::NAME  => {
-				self.__encapsulate(ApplicationTag4::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag5::<()>::NAME  => {
-				self.__encapsulate(ApplicationTag5::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag6::<()>::NAME  => {
-				self.__encapsulate(ApplicationTag6::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag7::<()>::NAME  => {
-				self.__encapsulate(ApplicationTag7::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag8::<()>::NAME  => {
-				self.__encapsulate(ApplicationTag8::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag9::<()>::NAME  => {
-				self.__encapsulate(ApplicationTag9::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag10::<()>::NAME => {
-				self.__encapsulate(ApplicationTag10::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag11::<()>::NAME => {
-				self.__encapsulate(ApplicationTag11::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag12::<()>::NAME => {
-				self.__encapsulate(ApplicationTag12::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag13::<()>::NAME => {
-				self.__encapsulate(ApplicationTag13::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag14::<()>::NAME => {
-				self.__encapsulate(ApplicationTag14::<()>::TAG);
-				value.serialize(self)
-			}
-			ApplicationTag15::<()>::NAME => {
-				self.__encapsulate(ApplicationTag15::<()>::TAG);
-				value.serialize(self)
-			}
-			_ => value.serialize(self),
+			ObjectIdentifierAsn1::NAME => self.tag_for_next_bytes = ObjectIdentifierAsn1::TAG,
+			BitStringAsn1::NAME => self.tag_for_next_bytes = BitStringAsn1::TAG,
+			IntegerAsn1::NAME => self.tag_for_next_bytes = IntegerAsn1::TAG,
+			DateAsn1::NAME => self.tag_for_next_bytes = DateAsn1::TAG,
+			Asn1SetOf::<()>::NAME => self.tag_for_next_seq = Asn1SetOf::<()>::TAG,
+			Asn1SequenceOf::<()>::NAME => self.tag_for_next_seq = Asn1SequenceOf::<()>::TAG,
+			BitStringAsn1Container::<()>::NAME => self.__encapsulate(BitStringAsn1Container::<()>::TAG),
+			ApplicationTag0::<()>::NAME  => self.__encapsulate(ApplicationTag0::<()>::TAG),
+			ApplicationTag1::<()>::NAME  => self.__encapsulate(ApplicationTag1::<()>::TAG),
+			ApplicationTag2::<()>::NAME  => self.__encapsulate(ApplicationTag2::<()>::TAG),
+			ApplicationTag3::<()>::NAME  => self.__encapsulate(ApplicationTag3::<()>::TAG),
+			ApplicationTag4::<()>::NAME  => self.__encapsulate(ApplicationTag4::<()>::TAG),
+			ApplicationTag5::<()>::NAME  => self.__encapsulate(ApplicationTag5::<()>::TAG),
+			ApplicationTag6::<()>::NAME  => self.__encapsulate(ApplicationTag6::<()>::TAG),
+			ApplicationTag7::<()>::NAME  => self.__encapsulate(ApplicationTag7::<()>::TAG),
+			ApplicationTag8::<()>::NAME  => self.__encapsulate(ApplicationTag8::<()>::TAG),
+			ApplicationTag9::<()>::NAME  => self.__encapsulate(ApplicationTag9::<()>::TAG),
+			ApplicationTag10::<()>::NAME => self.__encapsulate(ApplicationTag10::<()>::TAG),
+			ApplicationTag11::<()>::NAME => self.__encapsulate(ApplicationTag11::<()>::TAG),
+			ApplicationTag12::<()>::NAME => self.__encapsulate(ApplicationTag12::<()>::TAG),
+			ApplicationTag13::<()>::NAME => self.__encapsulate(ApplicationTag13::<()>::TAG),
+			ApplicationTag14::<()>::NAME => self.__encapsulate(ApplicationTag14::<()>::TAG),
+			ApplicationTag15::<()>::NAME => self.__encapsulate(ApplicationTag15::<()>::TAG),
+			_ => {},
 		}
+
+		value.serialize(self)
 	}
 	
 	fn serialize_newtype_variant<T: ?Sized + Serialize>(self, _name: &'static str,
@@ -369,14 +303,14 @@ impl<'a, 'se> serde::ser::Serializer for &'a mut Serializer<'se> {
 		Err(SerdeAsn1DerError::UnsupportedType)
 	}
 
-	#[cfg(feature = "more_types")]
+	#[cfg(feature = "extra_types")]
 	fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
 		debug_log!("serialize_seq");
 		let mut tag = 0x30;
 		std::mem::swap(&mut tag, &mut self.tag_for_next_seq);
 		Ok(Sequence::serialize_lazy(self, tag))
 	}
-	#[cfg(not(feature = "more_types"))]
+	#[cfg(not(feature = "extra_types"))]
 	fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
 		debug_log!("serialize_seq");
 		Ok(Sequence::serialize_lazy(self, 0x30))

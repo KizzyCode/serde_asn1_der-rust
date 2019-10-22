@@ -32,17 +32,17 @@ impl UnsignedInteger {
 	/// The deserialized integer for `data`
 	pub fn deserialize<T: UInt>(data: &[u8]) -> Result<T> {
 		// Check that we have some data
-		if data.is_empty() { Err(SerdeAsn1DerError::TruncatedData)? }
+		if data.is_empty() { return Err(SerdeAsn1DerError::TruncatedData) }
 		
 		// Check first byte (number is signed, has leading zero, ...)
 		let data = match data[0] {
-			128..=255 => Err(SerdeAsn1DerError::UnsupportedValue)?,
-			0 if data.len() > 1 && data[1] < 128 => Err(SerdeAsn1DerError::InvalidData)?,
+			128..=255 => return Err(SerdeAsn1DerError::UnsupportedValue),
+			0 if data.len() > 1 && data[1] < 128 => return Err(SerdeAsn1DerError::InvalidData),
 			0 => &data[1..],
 			_ => data
 		};
 		// Check the data length
-		if data.len() > 16 { Err(SerdeAsn1DerError::UnsupportedValue)? }
+		if data.len() > 16 { return Err(SerdeAsn1DerError::UnsupportedValue) }
 		
 		// Deserialize data
 		let mut num = [0; 16];

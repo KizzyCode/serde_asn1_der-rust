@@ -51,19 +51,17 @@
 //! 	tuple: (usize, ())
 //! }
 //!
-//! fn main() {
-//! 	let plain = TestStruct{ number: 7, vec: b"Testolope".to_vec(), tuple: (4, ()) };
-//! 	let serialized = to_vec(&plain).unwrap();
-//! 	let deserialized: TestStruct = from_bytes(&serialized).unwrap();
-//! }
+//! let plain = TestStruct{ number: 7, vec: b"Testolope".to_vec(), tuple: (4, ()) };
+//! let serialized = to_vec(&plain).unwrap();
+//! let deserialized: TestStruct = from_bytes(&serialized).unwrap();
 //! ```
 
-#[cfg(feature = "more_types")]
+#[cfg(feature = "extra_types")]
 extern crate num_bigint_dig as num_bigint;
 
-#[cfg(feature = "more_types")]
+#[cfg(feature = "extra_types")]
 pub mod asn1_wrapper;
-#[cfg(feature = "more_types")]
+#[cfg(feature = "extra_types")]
 pub mod bit_string;
 
 #[macro_use]

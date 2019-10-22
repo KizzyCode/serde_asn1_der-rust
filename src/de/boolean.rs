@@ -10,8 +10,8 @@ impl Boolean {
 	/// The deserialized boolean for `data`
 	pub fn deserialize(data: &[u8]) -> Result<bool> {
 		// Check lengths
-		if data.is_empty() { Err(SerdeAsn1DerError::TruncatedData)? }
-		if data.len() > 1 { Err(SerdeAsn1DerError::InvalidData)? }
+		if data.is_empty() { return Err(SerdeAsn1DerError::TruncatedData) }
+		if data.len() > 1 { return Err(SerdeAsn1DerError::InvalidData) }
 		
 		// Parse the boolean
 		Ok(match data[0] {
@@ -23,7 +23,7 @@ impl Boolean {
 				debug_log!("true!");
 				true
 			},
-			_ => Err(SerdeAsn1DerError::InvalidData)?
+			_ => return Err(SerdeAsn1DerError::InvalidData)
 		})
 	}
 }
