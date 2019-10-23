@@ -67,72 +67,72 @@ pub mod bit_string;
 #[macro_use]
 mod debug_log;
 
+mod de;
 mod misc;
 mod ser;
-mod de;
 
 pub use crate::{
-	de::{ Deserializer, from_bytes, from_reader },
-	ser::{ Serializer, to_vec, to_bytes, to_byte_buf, to_writer }
+    de::{from_bytes, from_reader, Deserializer},
+    ser::{to_byte_buf, to_bytes, to_vec, to_writer, Serializer},
 };
 pub use serde;
 use std::{
-	io, error::Error,
-	fmt::{ self, Display, Formatter }
+    error::Error,
+    fmt::{self, Display, Formatter},
+    io,
 };
-
 
 /// A `serde_asn1_der`-related error
 #[derive(Debug)]
 pub enum SerdeAsn1DerError {
-	/// The data is truncated
-	TruncatedData,
-	/// The data is invalid
-	InvalidData,
-	
-	/// The value may be valid but is unsupported (e.g. an integer that is too large)
-	UnsupportedValue,
-	/// The data type is not supported by the (de-)serializer
-	UnsupportedType,
-	
-	/// The provided sink is unable to accept all bytes
-	InvalidSink,
-	/// A custom message produced by `serde`
-	Message(String),
-	/// Some other underlying error (e.g. an IO error)
-	Other(Box<dyn Error + 'static>)
+    /// The data is truncated
+    TruncatedData,
+    /// The data is invalid
+    InvalidData,
+
+    /// The value may be valid but is unsupported (e.g. an integer that is too large)
+    UnsupportedValue,
+    /// The data type is not supported by the (de-)serializer
+    UnsupportedType,
+
+    /// The provided sink is unable to accept all bytes
+    InvalidSink,
+    /// A custom message produced by `serde`
+    Message(String),
+    /// Some other underlying error (e.g. an IO error)
+    Other(Box<dyn Error + 'static>),
 }
 impl Display for SerdeAsn1DerError {
-	fn fmt(&self, t: &mut Formatter) -> fmt::Result {
-		write!(t, "{:?}", self)
-	}
+    fn fmt(&self, t: &mut Formatter) -> fmt::Result {
+        write!(t, "{:?}", self)
+    }
 }
 impl Error for SerdeAsn1DerError {
-	fn source(&self) -> Option<&(dyn Error + 'static)> {
-		match self {
-			SerdeAsn1DerError::Other(source) => Some(source.as_ref()),
-			_ => None
-		}
-	}
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            SerdeAsn1DerError::Other(source) => Some(source.as_ref()),
+            _ => None,
+        }
+    }
 }
 impl serde::de::Error for SerdeAsn1DerError {
-	fn custom<T: Display>(msg: T) -> Self {
-		SerdeAsn1DerError::Message(msg.to_string())
-	}
+    fn custom<T: Display>(msg: T) -> Self {
+        SerdeAsn1DerError::Message(msg.to_string())
+    }
 }
 impl serde::ser::Error for SerdeAsn1DerError {
-	fn custom<T: Display>(msg: T) -> Self {
-		SerdeAsn1DerError::Message(msg.to_string())
-	}
+    fn custom<T: Display>(msg: T) -> Self {
+        SerdeAsn1DerError::Message(msg.to_string())
+    }
 }
 impl From<io::Error> for SerdeAsn1DerError {
-	fn from(io_error: io::Error) -> Self {
-		match io_error.kind() {
-			io::ErrorKind::UnexpectedEof => SerdeAsn1DerError::TruncatedData,
-			io::ErrorKind::WriteZero => SerdeAsn1DerError::InvalidSink,
-			_ => SerdeAsn1DerError::Other(Box::new(io_error))
-		}
-	}
+    fn from(io_error: io::Error) -> Self {
+        match io_error.kind() {
+            io::ErrorKind::UnexpectedEof => SerdeAsn1DerError::TruncatedData,
+            io::ErrorKind::WriteZero => SerdeAsn1DerError::InvalidSink,
+            _ => SerdeAsn1DerError::Other(Box::new(io_error)),
+        }
+    }
 }
 
 /// Syntactic sugar for `Result<T, SerdeAsn1DerError>`
