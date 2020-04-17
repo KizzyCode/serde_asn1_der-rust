@@ -1,19 +1,26 @@
-//! [![License](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](https://opensource.org/licenses/BSD-2-Clause)
-//! [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-//! [![Travis CI](https://travis-ci.org/KizzyCode/serde_asn1_der.svg?branch=master)](https://travis-ci.org/KizzyCode/serde_asn1_der)
-//! [![AppVeyor CI](https://ci.appveyor.com/api/projects/status/github/KizzyCode/serde_asn1_der?svg=true)](https://ci.appveyor.com/project/KizzyCode/serde-asn1-der)
+//! [![docs.rs](https://docs.rs/serde_asn1_der/badge.svg)](https://docs.rs/serde_asn1_der)
+//! [![License BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](https://opensource.org/licenses/BSD-2-Clause)
+//! [![License MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+//! [![crates.io](https://img.shields.io/crates/v/serde_asn1_der.svg)](https://crates.io/crates/serde_asn1_der)
+//! [![Download numbers](https://img.shields.io/crates/d/serde_asn1_der.svg)](https://crates.io/crates/serde_asn1_der)
+//! [![Travis CI](https://travis-ci.org/KizzyCode/serde_asn1_der-rust.svg?branch=master)](https://travis-ci.org/KizzyCode/serde_asn1_der-rust)
+//! [![AppVeyor CI](https://ci.appveyor.com/api/projects/status/github/KizzyCode/serde_asn1_der-rust?svg=true)](https://ci.appveyor.com/project/KizzyCode/serde-asn1-der-rust)
+//! [![dependency status](https://deps.rs/crate/serde_asn1_der/0.7.0/status.svg)](https://deps.rs/crate/serde_asn1_der/0.7.0)
 //!
 //!
 //! # serde_asn1_der
-//! This crate implements an ASN.1-DER subset for serde.
+//! Welcome to `serde_asn1_der` 🎉
 //!
-//! The following types have built-in support:
-//!  - `bool`: The ASN.1-BOOLEAN-type
-//!  - `u8`, `u16`, `u32`, `u64`, `u128`, `usize`: The ASN.1-INTEGER-type
-//!  - `()`: The ASN.1-NULL-type
-//!  - `&[u8]`, `Vec<u8>`: The ASN.1-OctetString-type
-//!  - `&str`, `String`: The ASN.1-UTF8String-type
-//!  - And everything sequence-like combined out of this types
+//! This crate implements an ASN.1-DER subset for serde based upon
+//! [`asn1_der`](https://crates.io/crates/asn1_der).
+//!
+//! The following types are supported:
+//! - `bool`: The ASN.1-BOOLEAN-type
+//! - `u8`, `u16`, `u32`, `u64`, `u128`, `usize`: The ASN.1-INTEGER-type
+//! - `()`, `Option`: The ASN.1-NULL-type
+//! - `&[u8]`, `Vec<u8>`: The ASN.1-OctetString-type
+//! - `&str`, `String`: The ASN.1-UTF8String-type
+//! - And everything sequence-like combined out of this types
 //!
 //! With the `serde_derive`-crate you can derive `Serialize` and `Deserialize` for all non-primitive
 //! elements:
@@ -58,73 +65,65 @@
 //! }
 //! ```
 
+// Forbid warnings during tests
+#![cfg_attr(test, forbid(warnings))]
+
+#[macro_use] pub extern crate asn1_der;
 mod misc;
 mod ser;
 mod de;
 
 pub use crate::{
-	de::{ Deserializer, from_bytes, from_reader },
-	ser::{ Serializer, to_vec, to_bytes, to_byte_buf, to_writer }
+	de::{ from_bytes, from_reader, from_source },
+	ser::{ to_vec, to_writer, to_sink }
 };
+pub use asn1_der::VecBacking;
 pub use serde;
+
+use asn1_der::Asn1DerError;
 use std::{
-	io, error::Error,
+	error::Error,
 	fmt::{ self, Display, Formatter }
 };
 
 
-/// A `serde_asn1_der`-related error
+/// A `serde_asn1_der` error
 #[derive(Debug)]
 pub enum SerdeAsn1DerError {
-	/// The data is truncated
-	TruncatedData,
-	/// The data is invalid
-	InvalidData,
-	
-	/// The value may be valid but is unsupported (e.g. an integer that is too large)
-	UnsupportedValue,
-	/// The data type is not supported by the (de-)serializer
-	UnsupportedType,
-	
-	/// The provided sink is unable to accept all bytes
-	InvalidSink,
-	/// A custom message produced by `serde`
-	Message(String),
-	/// Some other underlying error (e.g. an IO error)
-	Other(Box<dyn Error + 'static>)
+	Asn1DerError(Asn1DerError),
+	SerdeError(String)
 }
 impl Display for SerdeAsn1DerError {
-	fn fmt(&self, t: &mut Formatter) -> fmt::Result {
-		write!(t, "{:?}", self)
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		match self {
+			SerdeAsn1DerError::Asn1DerError(e) => e.fmt(f),
+			SerdeAsn1DerError::SerdeError(s) => write!(f, "Serde error: {}", s)
+		}
 	}
 }
 impl Error for SerdeAsn1DerError {
 	fn source(&self) -> Option<&(dyn Error + 'static)> {
 		match self {
-			SerdeAsn1DerError::Other(source) => Some(source.as_ref()),
+			SerdeAsn1DerError::Asn1DerError(e) => e.source(),
 			_ => None
 		}
 	}
 }
 impl serde::de::Error for SerdeAsn1DerError {
-	fn custom<T: Display>(msg: T) -> Self {
-		SerdeAsn1DerError::Message(msg.to_string())
+	fn custom<T>(msg: T) -> Self where T: Display {
+		SerdeAsn1DerError::SerdeError(msg.to_string())
 	}
 }
 impl serde::ser::Error for SerdeAsn1DerError {
-	fn custom<T: Display>(msg: T) -> Self {
-		SerdeAsn1DerError::Message(msg.to_string())
+	fn custom<T>(msg: T) -> Self where T: Display {
+		SerdeAsn1DerError::SerdeError(msg.to_string())
 	}
 }
-impl From<io::Error> for SerdeAsn1DerError {
-	fn from(io_error: io::Error) -> Self {
-		match io_error.kind() {
-			io::ErrorKind::UnexpectedEof => SerdeAsn1DerError::TruncatedData,
-			io::ErrorKind::WriteZero => SerdeAsn1DerError::InvalidSink,
-			_ => SerdeAsn1DerError::Other(Box::new(io_error))
-		}
+impl From<Asn1DerError> for SerdeAsn1DerError {
+	fn from(e: Asn1DerError) -> Self {
+		SerdeAsn1DerError::Asn1DerError(e)
 	}
 }
 
-/// Syntactic sugar for `Result<T, SerdeAsn1DerError>`
+/// Syntactic sugar for `Result<T, Asn1DerError>`
 pub type Result<T> = std::result::Result<T, SerdeAsn1DerError>;

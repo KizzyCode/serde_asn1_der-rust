@@ -1,16 +1,23 @@
-[![License](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](https://opensource.org/licenses/BSD-2-Clause)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Travis CI](https://travis-ci.org/KizzyCode/serde_asn1_der.svg?branch=master)](https://travis-ci.org/KizzyCode/serde_asn1_der)
-[![AppVeyor CI](https://ci.appveyor.com/api/projects/status/github/KizzyCode/serde_asn1_der?svg=true)](https://ci.appveyor.com/project/KizzyCode/serde-asn1-der)
+[![docs.rs](https://docs.rs/serde_asn1_der/badge.svg)](https://docs.rs/serde_asn1_der)
+[![License BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](https://opensource.org/licenses/BSD-2-Clause)
+[![License MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![crates.io](https://img.shields.io/crates/v/serde_asn1_der.svg)](https://crates.io/crates/serde_asn1_der)
+[![Download numbers](https://img.shields.io/crates/d/serde_asn1_der.svg)](https://crates.io/crates/serde_asn1_der)
+[![Travis CI](https://travis-ci.org/KizzyCode/serde_asn1_der-rust.svg?branch=master)](https://travis-ci.org/KizzyCode/serde_asn1_der-rust)
+[![AppVeyor CI](https://ci.appveyor.com/api/projects/status/github/KizzyCode/serde_asn1_der-rust?svg=true)](https://ci.appveyor.com/project/KizzyCode/serde-asn1-der-rust)
+[![dependency status](https://deps.rs/crate/serde_asn1_der/0.7.0/status.svg)](https://deps.rs/crate/serde_asn1_der/0.7.0)
 
 
 # serde_asn1_der
-This crate implements an ASN.1-DER subset for serde. 
+Welcome to `serde_asn1_der` 🎉
 
-The following types have built-in support:
+This crate implements an ASN.1-DER subset for serde based upon
+[`asn1_der`](https://crates.io/crates/asn1_der).
+
+The following types are supported:
  - `bool`: The ASN.1-BOOLEAN-type
  - `u8`, `u16`, `u32`, `u64`, `u128`, `usize`: The ASN.1-INTEGER-type
- - `()`: The ASN.1-NULL-type
+ - `()`, `Option`: The ASN.1-NULL-type
  - `&[u8]`, `Vec<u8>`: The ASN.1-OctetString-type
  - `&str`, `String`: The ASN.1-UTF8String-type
  - And everything sequence-like combined out of this types
@@ -57,7 +64,3 @@ fn main() {
 	let deserialized: TestStruct = from_bytes(&serialized).unwrap();
 }
 ```
-
-
-# Dependencies
-Obviously [`serde`](https://crates.io/crates/serde). Otherwise, it's dependency less.

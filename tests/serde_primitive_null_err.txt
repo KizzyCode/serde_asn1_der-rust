@@ -1,7 +1,0 @@
-# Invalid tag
-der__: 0600
-error: InvalidData
-
-# Invalid value
-der__: 050100
-error: InvalidData

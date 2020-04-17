@@ -1,7 +1,0 @@
-# Invalid tag
-der__: 050107
-error: InvalidData
-
-# Truncated data
-der__: 040207
-error: TruncatedData
