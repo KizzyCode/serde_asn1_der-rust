@@ -1,6 +1,6 @@
 [package]
 name = "serde_asn1_der"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2018"
 authors = ["KizzyCode Software Labs./Keziah Biermann <development@kizzycode.de>"]
 keywords = ["serde", "asn1", "asn1-der", "no_panic"]
@@ -18,7 +18,7 @@ appveyor = { repository = "KizzyCode/serde_asn1_der-rust" }
 
 [dependencies]
 serde = "^1.0"
-asn1_der = "^0.7"
+asn1_der = "^0.7.1"
 
 
 [dev-dependencies]

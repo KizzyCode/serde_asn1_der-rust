@@ -149,21 +149,21 @@ impl<'a, 'r, S: Sink> serde::ser::Serializer for &'r mut Serializer<'a, S> {
 		Ok(v.encode(&mut self.sink).propagate(e!("Failed to write boolean"))?)
 	}
 	
-	fn serialize_i8(self, v: i8) -> Result<Self::Ok> {
-		Ok(v.encode(&mut self.sink).propagate(e!("Failed to write integer"))?)
+	fn serialize_i8(self, _v: i8) -> Result<Self::Ok> {
+		Err(eunsupported!("The object type is not supported by this implementation"))?
 	}
-	fn serialize_i16(self, v: i16) -> Result<Self::Ok> {
-		Ok(v.encode(&mut self.sink).propagate(e!("Failed to write integer"))?)
+	fn serialize_i16(self, _v: i16) -> Result<Self::Ok> {
+		Err(eunsupported!("The object type is not supported by this implementation"))?
 	}
-	fn serialize_i32(self, v: i32) -> Result<Self::Ok> {
-		Ok(v.encode(&mut self.sink).propagate(e!("Failed to write integer"))?)
+	fn serialize_i32(self, _v: i32) -> Result<Self::Ok> {
+		Err(eunsupported!("The object type is not supported by this implementation"))?
 	}
-	fn serialize_i64(self, v: i64) -> Result<Self::Ok> {
-		Ok(v.encode(&mut self.sink).propagate(e!("Failed to write integer"))?)
+	fn serialize_i64(self, _v: i64) -> Result<Self::Ok> {
+		Err(eunsupported!("The object type is not supported by this implementation"))?
 	}
 	//noinspection RsTraitImplementation
-	fn serialize_i128(self, v: i128) -> Result<Self::Ok> {
-		Ok(v.encode(&mut self.sink).propagate(e!("Failed to write integer"))?)
+	fn serialize_i128(self, _v: i128) -> Result<Self::Ok> {
+		Err(eunsupported!("The object type is not supported by this implementation"))?
 	}
 	
 	//noinspection RsUnresolvedReference

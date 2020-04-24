@@ -66,26 +66,21 @@ impl<'a, 'r> serde::de::Deserializer<'a> for &'r mut Deserializer<'a> {
 		visitor.visit_bool(bool)
 	}
 	
-	fn deserialize_i8<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value> {
-		let i8 = i8::load(self.object).propagate(e!("Failed to load object"))?;
-		visitor.visit_i8(i8)
+	fn deserialize_i8<V: Visitor<'a>>(self, _visitor: V) -> Result<V::Value> {
+		Err(eunsupported!("The object type is not supported by this implementation"))?
 	}
-	fn deserialize_i16<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value> {
-		let i16 = i16::load(self.object).propagate(e!("Failed to load object"))?;
-		visitor.visit_i16(i16)
+	fn deserialize_i16<V: Visitor<'a>>(self, _visitor: V) -> Result<V::Value> {
+		Err(eunsupported!("The object type is not supported by this implementation"))?
 	}
-	fn deserialize_i32<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value> {
-		let i32 = i32::load(self.object).propagate(e!("Failed to load object"))?;
-		visitor.visit_i32(i32)
+	fn deserialize_i32<V: Visitor<'a>>(self, _visitor: V) -> Result<V::Value> {
+		Err(eunsupported!("The object type is not supported by this implementation"))?
 	}
-	fn deserialize_i64<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value> {
-		let i64 = i64::load(self.object).propagate(e!("Failed to load object"))?;
-		visitor.visit_i64(i64)
+	fn deserialize_i64<V: Visitor<'a>>(self, _visitor: V) -> Result<V::Value> {
+		Err(eunsupported!("The object type is not supported by this implementation"))?
 	}
 	//noinspection RsTraitImplementation
-	fn deserialize_i128<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value> {
-		let i128 = i128::load(self.object).propagate(e!("Failed to load object"))?;
-		visitor.visit_i128(i128)
+	fn deserialize_i128<V: Visitor<'a>>(self, _visitor: V) -> Result<V::Value> {
+		Err(eunsupported!("The object type is not supported by this implementation"))?
 	}
 	
 	fn deserialize_u8<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value> {
