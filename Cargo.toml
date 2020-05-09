@@ -17,7 +17,7 @@ appveyor = { repository = "KizzyCode/serde_asn1_der-rust" }
 
 
 [features]
-default = ["any"]
+default = []
 any = ["erased-serde"]
 
 

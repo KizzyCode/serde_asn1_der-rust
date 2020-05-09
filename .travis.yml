@@ -12,4 +12,6 @@ compiler:
 
 script:
   - cargo test --verbose
+  - cargo test --verbose --features="any"
   - cargo test --verbose --release
+  - cargo test --verbose --release --features="any"

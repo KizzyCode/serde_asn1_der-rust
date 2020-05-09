@@ -1,3 +1,5 @@
+#![cfg(feature = "any")]
+
 #[macro_use] extern crate serde_derive;
 use serde_asn1_der::AnyObject;
 
