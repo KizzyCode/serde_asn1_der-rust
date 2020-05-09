@@ -72,11 +72,16 @@
 mod misc;
 mod ser;
 mod de;
+#[cfg(feature = "any")]
+	mod any;
 
 pub use crate::{
 	de::{ from_bytes, from_reader, from_source },
 	ser::{ to_vec, to_writer, to_sink }
 };
+#[cfg(feature = "any")]
+	pub use crate::any::AnyObject;
+
 pub use asn1_der::VecBacking;
 pub use serde;
 
