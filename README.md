@@ -64,3 +64,8 @@ fn main() {
 	let deserialized: TestStruct = from_bytes(&serialized).unwrap();
 }
 ```
+
+
+# `AnyObject`
+This crate also offers a type-erased `AnyObject`-trait, that allows you to use `Box<dyn AnyObject>`
+instead of a specific type. To enable `AnyObject`, use the `"any"`-feature.
