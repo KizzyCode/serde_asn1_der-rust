@@ -160,7 +160,7 @@ impl<'a, 'r> serde::de::Deserializer<'a> for &'r mut Deserializer<'a> {
 	fn deserialize_newtype_struct<V: Visitor<'a>>(self, _name: &'static str, visitor: V)
 		-> Result<V::Value>
 	{
-		self.deserialize_any(visitor)
+		visitor.visit_newtype_struct(self)
 	}
 	
 	fn deserialize_seq<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value> {

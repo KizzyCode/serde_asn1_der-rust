@@ -18,6 +18,10 @@ struct TestStruct {
 }
 
 
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+struct NewtypeTestStruct(TestStruct);
+
+
 #[test]
 fn test() {
 	// Nested tuple
@@ -42,7 +46,7 @@ fn test() {
 	assert_eq!(decoded, plain);
 	
 	
-	// Test struct with None
+	// Test struct with `Some`
 	let plain = TestStruct {
 		number: 7, vec: b"Testolope".to_vec(),
 		tuple: (4, ()), option: Some("Testolope".to_string())
@@ -53,6 +57,20 @@ fn test() {
 	assert_eq!(encoded, der.as_ref());
 	
 	let decoded: TestStruct = from_bytes(&encoded).unwrap();
+	assert_eq!(decoded, plain);
+
+
+	// Newtype test struct with `Some`
+	let plain = NewtypeTestStruct(TestStruct {
+		number: 7, vec: b"Testolope".to_vec(),
+		tuple: (4, ()), option: Some("Testolope".to_string())
+	});
+	let der = b"\x30\x20\x02\x01\x07\x04\x09\x54\x65\x73\x74\x6f\x6c\x6f\x70\x65\x30\x05\x02\x01\x04\x05\x00\x0c\x09\x54\x65\x73\x74\x6f\x6c\x6f\x70\x65";
+
+	let encoded = to_vec(&plain).unwrap();
+	assert_eq!(encoded, der.as_ref());
+
+	let decoded: NewtypeTestStruct = from_bytes(&encoded).unwrap();
 	assert_eq!(decoded, plain);
 }
 
