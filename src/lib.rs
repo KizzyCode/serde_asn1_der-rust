@@ -65,9 +65,6 @@
 //! }
 //! ```
 
-// Forbid warnings during tests
-#![cfg_attr(test, forbid(warnings))]
-
 #[macro_use] pub extern crate asn1_der;
 mod misc;
 mod ser;

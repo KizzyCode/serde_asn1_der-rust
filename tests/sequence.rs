@@ -1,5 +1,3 @@
-#![forbid(warnings)]
-
 #[macro_use] extern crate serde_derive;
 use serde_asn1_der::{ SerdeAsn1DerError::Asn1DerError as Error, to_vec, from_bytes };
 use asn1_der::{
