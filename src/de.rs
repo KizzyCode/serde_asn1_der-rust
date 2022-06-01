@@ -222,15 +222,11 @@ pub fn from_bytes<'a, T: Deserialize<'a>>(bytes: &'a[u8]) -> Result<T> {
     T::deserialize(&mut Deserializer{ object })
 }
 /// Copies the first top-level object from `reader` into `backing` and deserializes it from there
-pub fn from_reader<'a, T: Deserialize<'a>>(reader: impl Read, backing: impl Sink + Into<&'a[u8]>)
-    -> Result<T>
-{
+pub fn from_reader<'a, T: Deserialize<'a>>(reader: impl Read, backing: impl Sink + Into<&'a[u8]>) -> Result<T> {
     from_source(ReaderSource(reader), backing)
 }
 /// Copies the first top-level object from `source` into `backing` and deserializes it from there
-pub fn from_source<'a, T: Deserialize<'a>>(mut source: impl Source,
-    backing: impl Sink + Into<&'a[u8]>) -> Result<T>
-{
+pub fn from_source<'a, T: Deserialize<'a>>(mut source: impl Source, backing: impl Sink + Into<&'a[u8]>) -> Result<T> {
     let object = DerObject::decode_from_source(&mut source, backing)
         .propagate(e!("Failed to decode DER object"))?;
     T::deserialize(&mut Deserializer{ object })

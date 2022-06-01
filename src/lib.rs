@@ -69,8 +69,9 @@
 mod misc;
 mod ser;
 mod de;
+
 #[cfg(feature = "any")]
-    mod any;
+mod any;
 
 pub use crate::{
     de::{ from_bytes, from_reader, from_source },
