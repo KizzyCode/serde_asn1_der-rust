@@ -29,18 +29,18 @@
 //!
 //! #[derive(Serialize, Deserialize)] // Now our struct supports all DER-conversion-traits
 //! struct Address {
-//! 	street: String,
-//! 	house_number: u128,
-//! 	postal_code: u128,
-//! 	state: String,
-//! 	country: String
+//!     street: String,
+//!     house_number: u128,
+//!     postal_code: u128,
+//!     state: String,
+//!     country: String
 //! }
 //!
 //! #[derive(Serialize, Deserialize)] // Now our struct supports all DER-conversion-traits too
 //! struct Customer {
-//! 	name: String,
-//! 	e_mail_address: String,
-//! 	postal_address: Address
+//!     name: String,
+//!     e_mail_address: String,
+//!     postal_address: Address
 //! }
 //! ```
 //!
@@ -52,79 +52,80 @@
 //!
 //! #[derive(Serialize, Deserialize)]
 //! struct TestStruct {
-//! 	number: u8,
-//! 	#[serde(with = "serde_bytes")]
-//! 	vec: Vec<u8>,
-//! 	tuple: (usize, ())
+//!     number: u8,
+//!     #[serde(with = "serde_bytes")]
+//!     vec: Vec<u8>,
+//!     tuple: (usize, ())
 //! }
 //!
-//! fn main() {
-//! 	let plain = TestStruct{ number: 7, vec: b"Testolope".to_vec(), tuple: (4, ()) };
-//! 	let serialized = to_vec(&plain).unwrap();
-//! 	let deserialized: TestStruct = from_bytes(&serialized).unwrap();
-//! }
+//! let plain = TestStruct{ number: 7, vec: b"Testolope".to_vec(), tuple: (4, ()) };
+//! let serialized = to_vec(&plain).unwrap();
+//! let deserialized: TestStruct = from_bytes(&serialized).unwrap();
 //! ```
+
+#![allow(clippy::or_fun_call)]
 
 #[macro_use] pub extern crate asn1_der;
 mod misc;
 mod ser;
 mod de;
 #[cfg(feature = "any")]
-	mod any;
+    mod any;
 
 pub use crate::{
-	de::{ from_bytes, from_reader, from_source },
-	ser::{ to_vec, to_writer, to_sink }
+    de::{ from_bytes, from_reader, from_source },
+    ser::{ to_vec, to_writer, to_sink }
 };
+
 #[cfg(feature = "any")]
-	pub use crate::any::AnyObject;
+pub use crate::any::AnyObject;
 
 pub use asn1_der::VecBacking;
 pub use serde;
 
 use asn1_der::Asn1DerError;
 use std::{
-	error::Error,
-	fmt::{ self, Display, Formatter }
+    error::Error,
+    fmt::{ self, Display, Formatter }
 };
 
 
 /// A `serde_asn1_der` error
 #[derive(Debug)]
 pub enum SerdeAsn1DerError {
-	Asn1DerError(Asn1DerError),
-	SerdeError(String)
+    Asn1DerError(Asn1DerError),
+    SerdeError(String)
 }
 impl Display for SerdeAsn1DerError {
-	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-		match self {
-			SerdeAsn1DerError::Asn1DerError(e) => e.fmt(f),
-			SerdeAsn1DerError::SerdeError(s) => write!(f, "Serde error: {}", s)
-		}
-	}
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            SerdeAsn1DerError::Asn1DerError(e) => e.fmt(f),
+            SerdeAsn1DerError::SerdeError(s) => write!(f, "Serde error: {}", s)
+        }
+    }
 }
 impl Error for SerdeAsn1DerError {
-	fn source(&self) -> Option<&(dyn Error + 'static)> {
-		match self {
-			SerdeAsn1DerError::Asn1DerError(e) => e.source(),
-			_ => None
-		}
-	}
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            SerdeAsn1DerError::Asn1DerError(e) => e.source(),
+            _ => None
+        }
+    }
 }
 impl serde::de::Error for SerdeAsn1DerError {
-	fn custom<T>(msg: T) -> Self where T: Display {
-		SerdeAsn1DerError::SerdeError(msg.to_string())
-	}
+    fn custom<T>(msg: T) -> Self where T: Display {
+        SerdeAsn1DerError::SerdeError(msg.to_string())
+    }
 }
 impl serde::ser::Error for SerdeAsn1DerError {
-	fn custom<T>(msg: T) -> Self where T: Display {
-		SerdeAsn1DerError::SerdeError(msg.to_string())
-	}
+    fn custom<T>(msg: T) -> Self where T: Display {
+        SerdeAsn1DerError::SerdeError(msg.to_string())
+    }
 }
 impl From<Asn1DerError> for SerdeAsn1DerError {
-	fn from(e: Asn1DerError) -> Self {
-		SerdeAsn1DerError::Asn1DerError(e)
-	}
+    fn from(e: Asn1DerError) -> Self {
+        SerdeAsn1DerError::Asn1DerError(e)
+    }
 }
 
 /// Syntactic sugar for `Result<T, Asn1DerError>`
