@@ -5,7 +5,7 @@
 [![Download numbers](https://img.shields.io/crates/d/serde_asn1_der.svg)](https://crates.io/crates/serde_asn1_der)
 [![Travis CI](https://travis-ci.org/KizzyCode/serde_asn1_der-rust.svg?branch=master)](https://travis-ci.org/KizzyCode/serde_asn1_der-rust)
 [![AppVeyor CI](https://ci.appveyor.com/api/projects/status/github/KizzyCode/serde_asn1_der-rust?svg=true)](https://ci.appveyor.com/project/KizzyCode/serde-asn1-der-rust)
-[![dependency status](https://deps.rs/crate/serde_asn1_der/0.7.0/status.svg)](https://deps.rs/crate/serde_asn1_der/0.7.0)
+[![dependency status](https://deps.rs/crate/serde_asn1_der/0.7.4/status.svg)](https://deps.rs/crate/serde_asn1_der/0.7.4)
 
 
 # serde_asn1_der
