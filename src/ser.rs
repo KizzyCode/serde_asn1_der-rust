@@ -145,7 +145,12 @@ impl<'a, 'r, S: Sink> serde::ser::Serializer for &'r mut Serializer<'a, S> {
     type SerializeMap = KeyValueWriter;
     type SerializeStruct = SequenceWriter<'a, 'r, S>;
     type SerializeStructVariant = KeyValueWriter;
-    
+
+    #[inline]
+    fn is_human_readable(&self) -> bool {
+        false
+    }
+
     fn serialize_bool(self, v: bool) -> Result<Self::Ok> {
         Ok(v.encode(&mut self.sink).propagate(e!("Failed to write boolean"))?)
     }
