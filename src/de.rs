@@ -42,7 +42,12 @@ struct Deserializer<'a> {
 }
 impl<'a, 'r> serde::de::Deserializer<'a> for &'r mut Deserializer<'a> {
     type Error = SerdeAsn1DerError;
-    
+
+    #[inline]
+    fn is_human_readable(&self) -> bool {
+        false
+    }
+
     fn deserialize_any<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value> {
         match self.object.tag() {
             Boolean::TAG => self.deserialize_bool(visitor),
