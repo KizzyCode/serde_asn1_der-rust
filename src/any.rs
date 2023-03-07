@@ -1,69 +1,108 @@
 use serde::{
-    ser::{ Serialize, Serializer },
-    de::{ Deserialize, DeserializeOwned, Deserializer, Error, SeqAccess, Visitor }
+    de::{Deserialize, DeserializeOwned, Deserializer, Error, SeqAccess, Visitor},
+    ser::{Serialize, Serializer},
 };
 use std::{
     any::Any,
-    fmt::{ self, Formatter }
+    fmt::{self, Formatter},
 };
-
 
 struct AnyVisitor;
 impl<'de> Visitor<'de> for AnyVisitor {
     type Value = Box<dyn AnyObject>;
-    
+
     fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
         write!(formatter, "a valid DER object")
     }
-    
-    fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> where E: Error {
+
+    fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Box::new(v))
     }
-    
-    fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E> where E: Error {
+
+    fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Box::new(v))
     }
-    fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E> where E: Error {
+    fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Box::new(v))
     }
-    fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E> where E: Error {
+    fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Box::new(v))
     }
-    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E> where E: Error {
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Box::new(v))
     }
     //noinspection RsTraitImplementation
-    fn visit_u128<E>(self, v: u128) -> Result<Self::Value, E> where E: Error {
+    fn visit_u128<E>(self, v: u128) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Box::new(v))
     }
-    
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where E: Error {
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         self.visit_string(v.to_string())
     }
-    fn visit_string<E>(self, v: String) -> Result<Self::Value, E> where E: Error {
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Box::new(v))
     }
-    
-    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> where E: Error {
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         self.visit_byte_buf(v.to_vec())
     }
-    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> where E: Error {
+    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Box::new(v))
     }
-    
-    fn visit_none<E>(self) -> Result<Self::Value, E> where E: Error {
+
+    fn visit_none<E>(self) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         self.visit_unit()
     }
     fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         deserializer.deserialize_any(Self)
     }
-    fn visit_unit<E>(self) -> Result<Self::Value, E> where E: Error {
+    fn visit_unit<E>(self) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Box::new(()))
     }
-    
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
         let mut elements = Vec::new();
         while let Some(next) = seq.next_element::<Box<dyn AnyObject>>()? {
             elements.push(next)
@@ -71,7 +110,6 @@ impl<'de> Visitor<'de> for AnyVisitor {
         Ok(Box::new(elements))
     }
 }
-
 
 /// An umbrella-trait for any type that implements `Serialize` and `DeserializeOwned`
 ///
@@ -113,13 +151,18 @@ impl<T: Serialize + DeserializeOwned + Any> AnyObject for T {
     }
 }
 impl<'de> Deserialize<'de> for Box<dyn AnyObject> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
         deserializer.deserialize_any(AnyVisitor)
     }
 }
 impl Serialize for Box<dyn AnyObject> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
         erased_serde::serialize(self.serializable(), serializer)
     }
 }
-

@@ -1,6 +1,5 @@
-use asn1_der::{ Asn1DerError, Source, Sink, ErrorChain };
-use std::io::{ self, Read, Write, ErrorKind::* };
-
+use asn1_der::{Asn1DerError, ErrorChain, Sink, Source};
+use std::io::{self, ErrorKind::*, Read, Write};
 
 /// Maps an `io::Error` to an `Asn1DerError`
 fn io_to_asn1_error(e: io::Error) -> Asn1DerError {
@@ -22,28 +21,27 @@ fn io_to_asn1_error(e: io::Error) -> Asn1DerError {
         WriteZero => eio!("An I/O error occurred (\"WriteZero\")"),
         Interrupted => eio!("An I/O error occurred (\"Interrupted\")"),
         UnexpectedEof => eio!("An I/O error occurred (\"UnexpectedEof\")"),
-        _ => eio!("An I/O error occurred (\"Other\")")
+        _ => eio!("An I/O error occurred (\"Other\")"),
     }
 }
-
 
 /// A newtype wrapper around a `T: Read` that implements `Source`
 pub struct ReaderSource<T: Read>(pub T);
 impl<T: Read> Source for ReaderSource<T> {
     fn read(&mut self) -> Result<u8, Asn1DerError> {
         let mut buf = [0];
-        self.0.read_exact(&mut buf).map_err(io_to_asn1_error)
+        self.0
+            .read_exact(&mut buf)
+            .map_err(io_to_asn1_error)
             .propagate(e!("Failed to read byte from underlying source"))?;
         Ok(buf[0])
     }
 }
 
-
 /// A newtype wrapper around a `T: Write` that implements `Sink`
 pub struct WriterSink<T: Write>(pub T);
 impl<T: Write> Sink for WriterSink<T> {
     fn write(&mut self, e: u8) -> Result<(), Asn1DerError> {
-        self.0.write_all(&[e]).map_err(io_to_asn1_error)
-            .propagate(e!("Failed to write byte to underlying sink"))
+        self.0.write_all(&[e]).map_err(io_to_asn1_error).propagate(e!("Failed to write byte to underlying sink"))
     }
 }

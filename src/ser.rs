@@ -1,21 +1,20 @@
-use crate::{ Result, SerdeAsn1DerError, misc::WriterSink };
-use serde::{
-    Serialize,
-    ser::{
-        SerializeSeq, SerializeStruct, SerializeTuple, SerializeTupleStruct,
-        SerializeTupleVariant, SerializeMap, SerializeStructVariant
-    }
-};
+use crate::{misc::WriterSink, Result, SerdeAsn1DerError};
 use asn1_der::{
-    Sink, DerObject, ErrorChain,
-    typed::{ DerEncodable, Null, OctetString, Sequence, Utf8String },
+    typed::{DerEncodable, Null, OctetString, Sequence, Utf8String},
+    DerObject, ErrorChain, Sink,
+};
+use serde::{
+    ser::{
+        SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple, SerializeTupleStruct,
+        SerializeTupleVariant,
+    },
+    Serialize,
 };
 use std::io::Write;
 
-
 pub struct SequenceWriter<'a, 'r, S: Sink> {
     serializer: &'r mut Serializer<'a, S>,
-    objects: Vec<Vec<u8>>
+    objects: Vec<Vec<u8>>,
 }
 impl<'a, 'r, S: Sink> SequenceWriter<'a, 'r, S> {
     /// Writes the next `value` to the internal buffer
@@ -32,7 +31,7 @@ impl<'a, 'r, S: Sink> SequenceWriter<'a, 'r, S> {
             vec.push(object);
             Ok(vec)
         });
-        
+
         // Write sequence
         let objects = objects?;
         Sequence::write(&objects, self.serializer.sink).propagate(e!("Failed to write sequence"))?;
@@ -42,7 +41,7 @@ impl<'a, 'r, S: Sink> SequenceWriter<'a, 'r, S> {
 impl<'a, 'r, S: Sink> SerializeSeq for SequenceWriter<'a, 'r, S> {
     type Ok = ();
     type Error = SerdeAsn1DerError;
-    
+
     fn serialize_element<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<()> {
         self.write_object(value)
     }
@@ -53,7 +52,7 @@ impl<'a, 'r, S: Sink> SerializeSeq for SequenceWriter<'a, 'r, S> {
 impl<'a, 'r, S: Sink> SerializeTuple for SequenceWriter<'a, 'r, S> {
     type Ok = ();
     type Error = SerdeAsn1DerError;
-    
+
     fn serialize_element<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<()> {
         self.write_object(value)
     }
@@ -64,10 +63,8 @@ impl<'a, 'r, S: Sink> SerializeTuple for SequenceWriter<'a, 'r, S> {
 impl<'a, 'r, S: Sink> SerializeStruct for SequenceWriter<'a, 'r, S> {
     type Ok = ();
     type Error = SerdeAsn1DerError;
-    
-    fn serialize_field<T: ?Sized + Serialize>(&mut self, _key: &'static str, value: &T)
-        -> Result<()>
-    {
+
+    fn serialize_field<T: ?Sized + Serialize>(&mut self, _key: &'static str, value: &T) -> Result<()> {
         self.write_object(value)
     }
     fn end(self) -> Result<Self::Ok> {
@@ -77,7 +74,7 @@ impl<'a, 'r, S: Sink> SerializeStruct for SequenceWriter<'a, 'r, S> {
 impl<'a, 'r, S: Sink> SerializeTupleStruct for SequenceWriter<'a, 'r, S> {
     type Ok = ();
     type Error = SerdeAsn1DerError;
-    
+
     fn serialize_field<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<()> {
         self.write_object(value)
     }
@@ -86,13 +83,12 @@ impl<'a, 'r, S: Sink> SerializeTupleStruct for SequenceWriter<'a, 'r, S> {
     }
 }
 
-
 /// A no-op struct for elements that require a key-value serialization
 struct KeyValueWriter;
 impl SerializeTupleVariant for KeyValueWriter {
     type Ok = ();
     type Error = SerdeAsn1DerError;
-    
+
     fn serialize_field<T: ?Sized + Serialize>(&mut self, _value: &T) -> Result<()> {
         Err(eunsupported!("Tuple variants are not supported by this implementation"))?
     }
@@ -103,7 +99,7 @@ impl SerializeTupleVariant for KeyValueWriter {
 impl SerializeMap for KeyValueWriter {
     type Ok = ();
     type Error = SerdeAsn1DerError;
-    
+
     fn serialize_key<T: ?Sized + Serialize>(&mut self, _key: &T) -> Result<()> {
         Err(eunsupported!("Map variants are not supported by this implementation"))?
     }
@@ -117,10 +113,8 @@ impl SerializeMap for KeyValueWriter {
 impl SerializeStructVariant for KeyValueWriter {
     type Ok = ();
     type Error = SerdeAsn1DerError;
-    
-    fn serialize_field<T: ?Sized + Serialize>(&mut self, _key: &'static str, _value: &T)
-        -> Result<()>
-    {
+
+    fn serialize_field<T: ?Sized + Serialize>(&mut self, _key: &'static str, _value: &T) -> Result<()> {
         Err(eunsupported!("Struct variants are not supported by this implementation"))?
     }
     fn end(self) -> Result<Self::Ok> {
@@ -128,16 +122,15 @@ impl SerializeStructVariant for KeyValueWriter {
     }
 }
 
-
 /// An ASN.1-DER serializer for `serde`
 struct Serializer<'a, S: Sink> {
-    sink: &'a mut S
+    sink: &'a mut S,
 }
 //noinspection RsTraitImplementation
 impl<'a, 'r, S: Sink> serde::ser::Serializer for &'r mut Serializer<'a, S> {
     type Ok = ();
     type Error = SerdeAsn1DerError;
-    
+
     type SerializeSeq = SequenceWriter<'a, 'r, S>;
     type SerializeTuple = SequenceWriter<'a, 'r, S>;
     type SerializeTupleStruct = SequenceWriter<'a, 'r, S>;
@@ -154,7 +147,7 @@ impl<'a, 'r, S: Sink> serde::ser::Serializer for &'r mut Serializer<'a, S> {
     fn serialize_bool(self, v: bool) -> Result<Self::Ok> {
         Ok(v.encode(&mut self.sink).propagate(e!("Failed to write boolean"))?)
     }
-    
+
     fn serialize_i8(self, _v: i8) -> Result<Self::Ok> {
         Err(eunsupported!("The object type is not supported by this implementation"))?
     }
@@ -171,7 +164,7 @@ impl<'a, 'r, S: Sink> serde::ser::Serializer for &'r mut Serializer<'a, S> {
     fn serialize_i128(self, _v: i128) -> Result<Self::Ok> {
         Err(eunsupported!("The object type is not supported by this implementation"))?
     }
-    
+
     //noinspection RsUnresolvedReference
     fn serialize_u8(self, v: u8) -> Result<Self::Ok> {
         Ok(v.encode(&mut self.sink).propagate(e!("Failed to write integer"))?)
@@ -192,14 +185,14 @@ impl<'a, 'r, S: Sink> serde::ser::Serializer for &'r mut Serializer<'a, S> {
     fn serialize_u128(self, v: u128) -> Result<Self::Ok> {
         Ok(v.encode(&mut self.sink).propagate(e!("Failed to write integer"))?)
     }
-    
+
     fn serialize_f32(self, _v: f32) -> Result<Self::Ok> {
         Err(eunsupported!("`f32`s are not supported by this implementation"))?
     }
     fn serialize_f64(self, _v: f64) -> Result<Self::Ok> {
         Err(eunsupported!("`f64`s are not supported by this implementation"))?
     }
-    
+
     //noinspection RsUnresolvedReference
     fn serialize_char(self, v: char) -> Result<Self::Ok> {
         let mut buf = [0; 4];
@@ -209,18 +202,18 @@ impl<'a, 'r, S: Sink> serde::ser::Serializer for &'r mut Serializer<'a, S> {
     fn serialize_str(self, v: &str) -> Result<Self::Ok> {
         Ok(Utf8String::write(v, &mut self.sink).propagate(e!("Failed to write UTF-8 string"))?)
     }
-    
+
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok> {
         Ok(OctetString::write(v, &mut self.sink).propagate(e!("Failed to write octet string"))?)
     }
-    
+
     fn serialize_none(self) -> Result<Self::Ok> {
         Ok(Null::write(&mut self.sink).propagate(e!("Failed to write null object"))?)
     }
     fn serialize_some<T: ?Sized + Serialize>(self, v: &T) -> Result<Self::Ok> {
         v.serialize(self)
     }
-    
+
     //noinspection RsUnresolvedReference
     fn serialize_unit(self) -> Result<Self::Ok> {
         Ok(Null::write(&mut self.sink).propagate(e!("Failed to write null object"))?)
@@ -229,61 +222,71 @@ impl<'a, 'r, S: Sink> serde::ser::Serializer for &'r mut Serializer<'a, S> {
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok> {
         Ok(Null::write(&mut self.sink).propagate(e!("Failed to write null object"))?)
     }
-    
-    fn serialize_unit_variant(self, _name: &'static str, _variant_index: u32,
-        _variant: &'static str) -> Result<Self::Ok>
-    {
+
+    fn serialize_unit_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+    ) -> Result<Self::Ok> {
         Err(eunsupported!("Unit variants are not supported by this implementation"))?
     }
-    
-    fn serialize_newtype_struct<T: ?Sized + Serialize>(self, _name: &'static str, value: &T)
-        -> Result<Self::Ok>
-    {
+
+    fn serialize_newtype_struct<T: ?Sized + Serialize>(self, _name: &'static str, value: &T) -> Result<Self::Ok> {
         value.serialize(self)
     }
-    
-    fn serialize_newtype_variant<T: ?Sized + Serialize>(self, _name: &'static str,
-        _variant_index: u32, _variant: &'static str, _value: &T) -> Result<Self::Ok>
-    {
+
+    fn serialize_newtype_variant<T: ?Sized + Serialize>(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _value: &T,
+    ) -> Result<Self::Ok> {
         Err(eunsupported!("Newtype variants are not supported by this implementation"))?
     }
-    
+
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-        Ok(SequenceWriter{ serializer: self, objects: Vec::new() })
+        Ok(SequenceWriter { serializer: self, objects: Vec::new() })
     }
     //noinspection RsUnresolvedReference
     fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
         self.serialize_seq(Some(len))
     }
     //noinspection RsUnresolvedReference
-    fn serialize_tuple_struct(self, _name: &'static str, len: usize)
-        -> Result<Self::SerializeTupleStruct>
-    {
+    fn serialize_tuple_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeTupleStruct> {
         self.serialize_seq(Some(len))
     }
-    
-    fn serialize_tuple_variant(self, _name: &'static str, _variant_index: u32,
-        _variant: &'static str, _len: usize) -> Result<Self::SerializeTupleVariant>
-    {
+
+    fn serialize_tuple_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeTupleVariant> {
         Err(eunsupported!("Tuple variants are not supported by this implementation"))?
     }
-    
+
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
         Err(eunsupported!("Maps variants are not supported by this implementation"))?
     }
-    
+
     //noinspection RsUnresolvedReference
     fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
         self.serialize_seq(Some(len))
     }
-    
-    fn serialize_struct_variant(self, _name: &'static str, _variant_index: u32,
-        _variant: &'static str, _len: usize) -> Result<Self::SerializeStructVariant>
-    {
+
+    fn serialize_struct_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeStructVariant> {
         Err(eunsupported!("Struct variants are not supported by this implementation"))?
     }
 }
-
 
 /// Serializes `value`
 pub fn to_vec<T: ?Sized + Serialize>(value: &T) -> Result<Vec<u8>> {
@@ -297,5 +300,5 @@ pub fn to_writer<T: ?Sized + Serialize>(value: &T, writer: impl Write) -> Result
 }
 /// Serializes `value` to `buf` and returns the amount of serialized bytes
 pub fn to_sink<T: ?Sized + Serialize>(value: &T, mut sink: impl Sink) -> Result<()> {
-    value.serialize(&mut Serializer{ sink: &mut sink })
+    value.serialize(&mut Serializer { sink: &mut sink })
 }
